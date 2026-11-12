@@ -1,0 +1,1139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Card Rotation</title>
+<meta name="description" content="Plan which credit cards each family member uses every month, keep every card active, and track balance transfers.">
+<meta name="theme-color" content="#0d6b67">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/favicon-32.png" sizes="32x32">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Card Rotation">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Figtree:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}</style>
+</head>
+<body>
+<style>
+/* Layout: one column app — month header, two person panels of card-shaped slots; wallet, history, settings as tabs */
+:root{
+  --bg:#f2f4f6; --surface:#ffffff; --surface-2:#f7f9fa; --ink:#15202b; --muted:#5b6977; --line:#dce2e8;
+  --accent:#0d6b67; --accent-ink:#ffffff; --accent-soft:#dff0ee;
+  --amex:#1d5bbd; --visa:#232a7a; --mc:#7a3b1d; --disc:#9a5a00;
+  --ok:#1f7a45; --ok-soft:#e1f2e7; --warn:#a15c00; --warn-soft:#fbefd9; --bad:#b3261e; --bad-soft:#fbe4e2;
+  --f-display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --f-body:"Figtree", "Segoe UI", system-ui, sans-serif;
+  --f-mono:"JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  --r:12px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0e1318; --surface:#161e26; --surface-2:#1b242d; --ink:#e5eaef; --muted:#93a1ae; --line:#2a3541;
+  --accent:#43c2b9; --accent-ink:#06211f; --accent-soft:#143532;
+  --amex:#2d6fd6; --visa:#3a42a8; --mc:#9a4f2a; --disc:#b06c0a;
+  --ok:#5cc98a; --ok-soft:#163626; --warn:#f0b357; --warn-soft:#3a2b12; --bad:#f08a82; --bad-soft:#3d1a18;
+  color-scheme:dark;}}
+:root[data-theme="dark"]{
+  --bg:#0e1318; --surface:#161e26; --surface-2:#1b242d; --ink:#e5eaef; --muted:#93a1ae; --line:#2a3541;
+  --accent:#43c2b9; --accent-ink:#06211f; --accent-soft:#143532;
+  --amex:#2d6fd6; --visa:#3a42a8; --mc:#9a4f2a; --disc:#b06c0a;
+  --ok:#5cc98a; --ok-soft:#163626; --warn:#f0b357; --warn-soft:#3a2b12; --bad:#f08a82; --bad-soft:#3d1a18;
+  color-scheme:dark;}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.5}
+.wrap{max-width:1040px;margin:0 auto;padding-inline:16px;padding-block:20px 48px;display:flex;flex-direction:column;gap:20px}
+h1,h2,h3{font-family:var(--f-display);margin:0;text-wrap:balance;letter-spacing:-.01em}
+h1{font-size:1.6rem;font-weight:700}
+h2{font-size:1.25rem;font-weight:700}
+h3{font-size:1.05rem;font-weight:500}
+.muted{color:var(--muted)}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.label{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:7px 14px;font-weight:600;font-size:.9rem;display:inline-flex;align-items:center;gap:6px}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.danger{color:var(--bad);border-color:color-mix(in oklab,var(--bad) 40%,var(--line))}
+.btn.danger.armed{background:var(--bad);color:var(--surface);border-color:var(--bad)}
+.btn.ghost{border-color:transparent;background:transparent}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.icon-btn{width:36px;height:36px;border-radius:50%;border:1px solid var(--line);background:var(--surface);display:inline-grid;place-items:center;font-size:1.1rem}
+
+/* top */
+.top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px}
+.brand{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.tabs{display:flex;gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:4px;flex-wrap:wrap}
+.tabs button{border:0;background:transparent;border-radius:999px;padding:6px 14px;font-weight:600;color:var(--muted)}
+.tabs button[aria-selected="true"]{background:var(--ink);color:var(--bg)}
+.banner{border:1px solid var(--line);background:var(--warn-soft);color:var(--ink);border-radius:var(--r);padding:10px 14px;font-size:.9rem}
+
+/* month bar */
+.monthbar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:14px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px}
+.mnav{display:flex;align-items:center;gap:10px}
+.mname{font-family:var(--f-display);font-size:1.5rem;font-weight:700;min-width:9.5ch;text-align:center}
+.mactions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.chip{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:3px 10px;font-size:.8rem;font-weight:600;white-space:nowrap}
+.chip.ok{background:var(--ok-soft);color:var(--ok)}
+.chip.warn{background:var(--warn-soft);color:var(--warn)}
+.chip.bad{background:var(--bad-soft);color:var(--bad)}
+.chip.neutral{background:var(--surface-2);color:var(--muted);border:1px solid var(--line)}
+.dot{width:7px;height:7px;border-radius:50%;background:currentColor}
+
+/* people */
+.people{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:16px}
+.person{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.person-head{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.slots{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px}
+.slot{display:flex;flex-direction:column;gap:6px;min-width:0}
+.cc{aspect-ratio:1.586;max-width:100%;width:100%;border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;justify-content:space-between;text-align:left;border:0;color:#fff;position:relative;overflow:hidden}
+.cc.amex{background:linear-gradient(135deg,var(--amex),color-mix(in oklab,var(--amex) 55%,#000))}
+.cc.visa{background:linear-gradient(135deg,var(--visa),color-mix(in oklab,var(--visa) 55%,#000))}
+.cc.mastercard{background:linear-gradient(135deg,var(--mc),color-mix(in oklab,var(--mc) 55%,#000))}
+.cc.discover{background:linear-gradient(135deg,var(--disc),color-mix(in oklab,var(--disc) 55%,#000))}
+.cc::after{content:"";position:absolute;inset:auto -30% -60% auto;width:80%;aspect-ratio:1;border-radius:50%;background:rgba(255,255,255,.07)}
+.cc .iss{font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;opacity:.85;font-weight:600}
+.cc .nm{font-family:var(--f-display);font-weight:500;font-size:1.02rem;line-height:1.2;overflow-wrap:anywhere}
+.cc .row{display:flex;justify-content:space-between;align-items:flex-end;gap:8px;position:relative;z-index:1}
+.cc .net{font-size:.7rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;background:rgba(255,255,255,.16);padding:2px 7px;border-radius:5px}
+.cc.suggested{opacity:.62;outline:2px dashed var(--accent);outline-offset:3px}
+.cc.suggested:hover{opacity:.9}
+.cc.empty{background:var(--surface-2);color:var(--muted);border:1.5px dashed var(--line);justify-content:center;align-items:center;text-align:center;gap:4px}
+.cc.empty::after{display:none}
+.cc.add3{border-style:dotted}
+.cc.empty:hover{border-color:var(--accent);color:var(--accent)}
+.cc.dupe{outline:3px solid var(--bad);outline-offset:2px}
+.slot-meta{display:flex;justify-content:space-between;gap:6px;font-size:.8rem;color:var(--muted);min-height:1.3em;flex-wrap:wrap}
+.linkish{border:0;background:none;padding:0;color:var(--accent);font-weight:600;font-size:.8rem}
+
+/* rule summary */
+.rules{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:12px}
+.rule{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;display:flex;flex-direction:column;gap:4px}
+.rule .v{font-family:var(--f-display);font-size:1.3rem;font-weight:700}
+
+/* wallet */
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
+.filters{display:flex;flex-wrap:wrap;gap:8px}
+.inp{border:1px solid var(--line);background:var(--surface-2);border-radius:8px;padding:7px 10px;min-width:0}
+.inp:focus{border-color:var(--accent);outline:none}
+.issuers{display:flex;flex-wrap:wrap;gap:8px}
+.list{display:flex;flex-direction:column}
+.crow{display:grid;grid-template-columns:minmax(0,2.4fr) minmax(0,1fr) minmax(0,1.1fr) auto;gap:12px;align-items:center;padding:10px 4px;border-top:1px solid var(--line)}
+.crow:first-child{border-top:0}
+.crow .name{font-weight:600;overflow-wrap:anywhere}
+.crow .sub{font-size:.82rem;color:var(--muted)}
+.badge{display:inline-block;font-size:.68rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:2px 7px;border-radius:5px;color:#fff}
+.badge.amex{background:var(--amex)}.badge.visa{background:var(--visa)}.badge.mastercard{background:var(--mc)}.badge.discover{background:var(--disc)}
+.inactive{opacity:.55}
+@media (max-width:640px){.crow{grid-template-columns:minmax(0,1fr) auto}.crow .hide-sm{display:none}}
+
+.empty-state{border:1.5px dashed var(--line);border-radius:var(--r);padding:28px 20px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:10px;color:var(--muted)}
+.empty-state h3{color:var(--ink)}
+
+/* history */
+.tscroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:.88rem;min-width:760px}
+th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:.72rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600}
+tbody tr{cursor:pointer}
+tbody tr:hover{background:var(--surface-2)}
+
+/* forms + modal */
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.field label{font-size:.82rem;font-weight:600}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr));gap:12px}
+.overlay{position:fixed;inset:0;background:rgba(10,15,20,.5);display:grid;place-items:center;padding:16px;z-index:20}
+.modal{background:var(--surface);border:1px solid var(--line);border-radius:16px;width:min(560px,100%);max-height:min(86vh,760px);display:flex;flex-direction:column;overflow:hidden}
+.modal-h{padding:16px 18px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:10px}
+.modal-b{padding:14px 18px;overflow:auto;display:flex;flex-direction:column;gap:12px}
+.modal-f{padding:12px 18px;border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.pick{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.pick:hover:not(:disabled){border-color:var(--accent)}
+.pick:disabled{opacity:.5;cursor:not-allowed}
+.pick .grow{flex:1;min-width:0}
+.pick.top-pick{border-color:var(--accent);background:var(--accent-soft)}
+.swatch{width:34px;height:22px;border-radius:4px;flex:none}
+.swatch.amex{background:var(--amex)}.swatch.visa{background:var(--visa)}.swatch.mastercard{background:var(--mc)}.swatch.discover{background:var(--disc)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:999px;padding:3px;gap:2px}
+.seg button{border:0;background:transparent;padding:4px 12px;border-radius:999px;font-weight:600;font-size:.85rem;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.btgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,320px),1fr));gap:8px}
+.stcard{display:flex;align-items:center;gap:10px;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:9px 10px 9px 12px;min-width:0;flex-wrap:wrap}
+.stcard .grow{flex:1;min-width:140px;overflow-wrap:anywhere}
+.stcard.st-bt{border-color:color-mix(in oklab,var(--bad) 45%,var(--line));background:var(--bad-soft)}
+.stcard.st-paused{opacity:.85;border-style:dashed}
+.seg3{display:inline-flex;border:1px solid var(--line);border-radius:999px;padding:2px;gap:2px;background:var(--surface);flex:none}
+.seg3 button{border:0;background:transparent;border-radius:999px;padding:4px 10px;font-size:.8rem;font-weight:600;color:var(--muted)}
+.seg3 button[aria-checked="true"].s-rotation{background:var(--ok);color:var(--surface)}
+.seg3 button[aria-checked="true"].s-bt{background:var(--bad);color:var(--surface)}
+.seg3 button[aria-checked="true"].s-paused{background:var(--ink);color:var(--bg)}
+.btsw{display:flex;align-items:center;gap:10px;text-align:left;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:9px 12px;min-width:0}
+.btsw .grow{min-width:0;flex:1;overflow-wrap:anywhere}
+.btsw:hover{border-color:var(--muted)}
+.btsw .track{flex:none;width:36px;height:20px;border-radius:999px;background:var(--line);position:relative;transition:background .15s}
+.btsw .knob{position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:var(--surface);box-shadow:0 1px 2px rgba(0,0,0,.25);transition:left .15s}
+.btsw[aria-checked="true"]{border-color:color-mix(in oklab,var(--bad) 45%,var(--line));background:var(--bad-soft)}
+.btsw[aria-checked="true"] .track{background:var(--bad)}
+.btsw[aria-checked="true"] .knob{left:18px}
+tbody.static tr{cursor:default}
+tbody.static tr:hover{background:transparent}
+td .inp{padding:5px 8px}
+.duelist{display:flex;flex-direction:column}
+.duerow{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line);flex-wrap:wrap}
+.duerow:first-child{border-top:0}
+.duerow .grow{flex:1;min-width:180px}
+.dueact{display:flex;gap:6px;flex-wrap:wrap}
+.extras{display:flex;flex-direction:column;gap:6px}
+.exlist{display:flex;flex-wrap:wrap;gap:6px}
+.exchip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--surface-2);border-radius:999px;padding:3px 4px 3px 10px;font-size:.84rem}
+.exchip .x{border:0;background:transparent;width:22px;height:22px;border-radius:50%;color:var(--muted);font-size:1rem;line-height:1}
+.exchip .x:hover{background:var(--line);color:var(--ink)}
+.steps{display:flex;gap:6px;align-items:center}.steps span{width:22px;height:5px;border-radius:3px;background:var(--line)}.steps span.on{background:var(--accent)}
+.counter{display:flex;gap:8px;flex-wrap:wrap}
+.cnt{width:48px;height:48px;border-radius:12px;border:1px solid var(--line);background:var(--surface-2);font-family:var(--f-display);font-size:1.25rem;font-weight:700}
+.cnt[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.optgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:10px}
+.opt{display:flex;flex-direction:column;gap:4px;text-align:left;border:1px solid var(--line);background:var(--surface-2);border-radius:12px;padding:14px}
+.opt:hover{border-color:var(--accent)}
+.opt-t{font-weight:600;font-family:var(--f-display);font-size:1.02rem}
+.drop{display:flex;flex-direction:column;gap:4px;align-items:center;text-align:center;border:1.5px dashed var(--line);border-radius:12px;padding:22px 16px;cursor:pointer;background:var(--surface-2)}
+.drop:hover,.drop:focus-within{border-color:var(--accent)}
+.drop input{max-width:100%}
+details summary{cursor:pointer;font-weight:600}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:999px;font-weight:600;font-size:.88rem;z-index:30}
+.note{font-size:.85rem;color:var(--muted)}
+.rowact{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.modal.wide{width:min(860px,100%)}
+@media (prefers-reduced-motion:no-preference){.cc,.pick,.btn{transition:border-color .15s, transform .15s}.cc:not(.empty):hover{transform:translateY(-2px)}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand"><h1>Card Rotation</h1><span class="muted" id="subtitle">2 Amex + 2 Visa each month</span></div>
+    <nav class="tabs" role="tablist" id="tabs">
+      <button role="tab" data-tab="month" aria-selected="true">This month</button>
+      <button role="tab" data-tab="wallet" aria-selected="false">Wallet</button>
+      <button role="tab" data-tab="history" aria-selected="false">History</button>
+      <button role="tab" data-tab="bt" aria-selected="false">BT &amp; Paused</button>
+      <button role="tab" data-tab="settings" aria-selected="false">Settings</button>
+    </nav>
+  </header>
+  <div id="banner" class="banner" hidden></div>
+  <main id="view"></main>
+</div>
+<div id="modal-root"></div>
+<div id="toast" class="toast" hidden></div>
+
+<script>
+(function(){
+const ISSUERS=["American Express","Apple","Bank of America","Barclays","Capital One","Chase","Citi","Discover","US Bank","Wells Fargo","Other"];
+const PIDS="abcdefgh".split("");
+const NETWORKS={amex:"Amex",visa:"Visa",mastercard:"Mastercard",discover:"Discover"};
+const MONTHS=["January","February","March","April","May","June","July","August","September","October","November","December"];
+const SHORT=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const DORMANT=6;
+function idle(){return Number(S.settings.idle)||3}
+function dueInfo(mid){
+  const {last}=usageBefore(mid);const usedThis=new Set(Object.values(slotsFor(mid)).filter(Boolean));
+  const due=[],soon=[];
+  for(const c of S.cards){if(c.active===false||c.bt||usedThis.has(c.id))continue;
+    const l=last[c.id];const gap=l?mDiff(l,mid):Infinity;
+    if(gap>idle())due.push({c,l,gap});else if(gap===idle())soon.push({c,l,gap});}
+  due.sort((a,b)=>b.gap-a.gap||a.c.name.localeCompare(b.c.name));
+  return {due,soon};
+}
+function placeCard(slots,mid,p,c){
+  const net=c.network==="amex"?"amex":"visa";let key=null;
+  const netOk=net==="amex"?c.network==="amex":(S.settings.visaRule==="visa"?c.network==="visa":c.network!=="amex");
+  if(netOk)for(let i=0;i<(S.settings.per[net]||1);i++){const k=p+"_"+net+"_"+i;if(!slots[k]||!cardById(slots[k])){key=k;break}}
+  if(!key&&hasThird(mid,p)&&!(slots[p+"_any_0"]&&cardById(slots[p+"_any_0"])))key=p+"_any_0";
+  if(!key){let i=S.settings.per[net]||1;while(slots[p+"_"+net+"_"+i])i++;key=p+"_"+net+"_"+i}
+  slots[key]=c.id;return key;
+}
+function assignCard(mid,p,id){
+  const c=cardById(id);if(!c)return;
+  const slots={...slotsFor(mid)};placeCard(slots,mid,p,c);
+  S.months[mid]={...(S.months[mid]||{}),slots};saveMonth(mid);
+  toast(`${c.issuer} ${c.name} added for ${nameOf(p)}`);
+}
+
+const S={
+  db:null, loading:true,
+  cards:[], months:{},
+  settings:{people:[{id:"a",name:""},{id:"b",name:""}],per:{amex:1,visa:1},visaRule:"visa",setupDone:false},
+  month:thisMonth(), tab:"month",
+  q:"", issuer:"", sort:"issuer", showAll:false
+};
+
+function thisMonth(){const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")}
+function shiftMonth(id,n){let[y,m]=id.split("-").map(Number);m+=n;while(m>12){m-=12;y++}while(m<1){m+=12;y--}return y+"-"+String(m).padStart(2,"0")}
+function mLabel(id){const[y,m]=id.split("-").map(Number);return MONTHS[m-1]+" "+y}
+function mShort(id){const[y,m]=id.split("-").map(Number);return SHORT[m-1]+" "+y}
+function mDiff(a,b){const[ya,ma]=a.split("-").map(Number),[yb,mb]=b.split("-").map(Number);return (yb-ya)*12+(mb-ma)}
+function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+const $=s=>document.querySelector(s);
+
+function toast(msg){const t=$("#toast");t.textContent=msg;t.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>t.hidden=true,2200)}
+function people(){return S.settings.people}
+function pids(){return people().map(x=>x.id)}
+function nameOf(p){const x=people().find(x=>x.id===p);return (x&&x.name.trim())||("Person "+(PIDS.indexOf(p)+1))}
+function cardById(id){return S.cards.find(c=>c.id===id)}
+
+function hasThird(mid,p){
+  if(S.settings.third)return true;
+  const m=mid&&S.months[mid];if(!m)return false;
+  return !!(m.third&&m.third[p])||!!(m.slots&&m.slots[p+"_any_0"]);
+}
+function slotKeys(mid,forceThird){
+  const keys=[];
+  for(const p of pids()){
+    for(const net of ["amex","visa"])for(let i=0;i<(S.settings.per[net]||1);i++)keys.push({key:p+"_"+net+"_"+i,p,net,i});
+    if(forceThird||hasThird(mid,p))keys.push({key:p+"_any_0",p,net:"any",i:0});
+  }
+  return keys;
+}
+function netLabel(net,i){return net==="any"?"3rd card":(net==="amex"?"Amex":"Visa")+(S.settings.per[net]>1?" "+(i+1):"")}
+function extrasFor(id,p){const s=slotsFor(id),keys=new Set(slotKeys(id).map(k=>k.key));return Object.entries(s).filter(([k,v])=>v&&k.startsWith(p+"_")&&!keys.has(k)).map(([k,v])=>cardById(v)).filter(Boolean)}
+function slotsFor(id){return (S.months[id]&&S.months[id].slots)||{}}
+function eligible(card,net){
+  if(card.active===false||card.bt)return false;
+  if(net==="any")return true;
+  if(net==="amex")return card.network==="amex";
+  return S.settings.visaRule==="visa"?card.network==="visa":card.network!=="amex";
+}
+function usage(){
+  const last={},count={};
+  for(const [mid,doc] of Object.entries(S.months)){
+    if(mid===S.month&&S.tab==="month")continue;
+    for(const cid of Object.values(doc.slots||{})){if(!cid)continue;count[cid]=(count[cid]||0)+1;if(!last[cid]||mid>last[cid])last[cid]=mid}
+  }
+  return {last,count};
+}
+function usageAll(){
+  const last={},count={};
+  for(const [mid,doc] of Object.entries(S.months)){
+    if(mid>thisMonth())continue;
+    for(const cid of Object.values(doc.slots||{})){if(!cid)continue;count[cid]=(count[cid]||0)+1;if(!last[cid]||mid>last[cid])last[cid]=mid}
+  }
+  return {last,count};
+}
+
+/* ---------- persistence ---------- */
+const chains={};
+function queue(path,fn){chains[path]=(chains[path]||Promise.resolve()).then(fn).catch(e=>{console.warn(e);toast(e&&e.code==="quota_exceeded"?"Storage is full. Remove some cards or months.":"Couldn't save. Check your connection and try again.")});return chains[path]}
+function saveMonth(id){
+  const slots={...slotsFor(id)};
+  const third={...((S.months[id]||{}).third||{})};
+  S.months[id]={...(S.months[id]||{}),slots,third};
+  render();
+  if(!S.db)return;
+  queue("months/"+id,()=>S.db.doc("months/"+id).set({slots,third,updatedAt:new Date().toISOString()}));
+}
+let setTimer;
+function saveSettings(){
+  clearTimeout(setTimer);
+  setTimer=setTimeout(()=>{if(S.db)queue("settings/main",()=>S.db.doc("settings/main").set(JSON.parse(JSON.stringify(S.settings))))},500);
+}
+function saveCard(card){
+  const body={issuer:card.issuer,name:card.name,network:card.network,last4:card.last4||"",holder:card.holder||"joint",active:card.active!==false,notes:card.notes||"",bt:!!card.bt,btEnds:card.btEnds||"",btStart:card.btStart||"",btPaidOff:card.btPaidOff||"",createdAt:card.createdAt||new Date().toISOString()};
+  if(!card.id){
+    const ref=S.db?S.db.collection("cards").doc():null;
+    card.id=ref?ref.id:"local-"+Math.random().toString(36).slice(2);
+    S.cards.push({...body,id:card.id});
+    if(ref)queue("cards/"+card.id,()=>ref.set(body));
+  }else{
+    const i=S.cards.findIndex(c=>c.id===card.id);if(i>=0)S.cards[i]={...body,id:card.id};
+    if(S.db)queue("cards/"+card.id,()=>S.db.doc("cards/"+card.id).set(body));
+  }
+}
+function deleteCard(id){
+  S.cards=S.cards.filter(c=>c.id!==id);
+  if(S.db)queue("cards/"+id,()=>S.db.doc("cards/"+id).delete());
+}
+
+/* ---------- views ---------- */
+function render(){
+  document.querySelectorAll("#tabs button").forEach(b=>b.setAttribute("aria-selected",String(b.dataset.tab===S.tab)));
+  const a=S.settings.per.amex,v=S.settings.per.visa;
+  const fam=people().length;$("#subtitle").textContent=`${fam} family member${fam>1?"s":""} · ${a*fam} Amex + ${v*fam} Visa each month · ${S.cards.length} card${S.cards.length===1?"":"s"} in wallet`;
+  const view=$("#view");
+  if(S.tab==="month")view.innerHTML=viewMonth();
+  else if(S.tab==="wallet")view.innerHTML=viewWallet();
+  else if(S.tab==="history")view.innerHTML=viewHistory();
+  else if(S.tab==="bt")view.innerHTML=viewBT();
+  else view.innerHTML=viewSettings();
+}
+
+function monthStatus(id){
+  const slots=slotsFor(id),keys=slotKeys(id);
+  const filled=keys.filter(k=>slots[k.key]&&cardById(slots[k.key])).length;
+  const ids=keys.map(k=>slots[k.key]).filter(Boolean);
+  const dupes=new Set(ids.filter((x,i)=>ids.indexOf(x)!==i));
+  return {filled,total:keys.length,dupes};
+}
+
+function viewMonth(){
+  const st=monthStatus(S.month),slots=slotsFor(S.month),{last}=usage();const sug=suggest(S.month);
+  let chip;
+  if(st.dupes.size)chip=`<span class="chip bad"><span class="dot"></span>Same card picked twice</span>`;
+  else if(st.filled===st.total)chip=`<span class="chip ok"><span class="dot"></span>All ${st.total} cards set</span>`;
+  else chip=`<span class="chip warn"><span class="dot"></span>${st.filled} of ${st.total} chosen</span>`;
+  const isNow=S.month===thisMonth();
+  let html=`<section class="monthbar">
+    <div class="mnav"><button class="icon-btn" data-act="prev" aria-label="Previous month">‹</button>
+      <div class="mname">${mLabel(S.month)}</div>
+      <button class="icon-btn" data-act="next" aria-label="Next month">›</button>
+      ${isNow?"":`<button class="btn ghost" data-act="today">Today</button>`}</div>
+    <div class="mactions">${chip}
+      ${Object.keys(sug).length?`<button class="btn primary" data-act="acceptall">Use ${Object.keys(sug).length} suggestion${Object.keys(sug).length>1?"s":""}</button>`:""}
+      <button class="btn" data-act="clearmonth" ${st.filled?"":"disabled"}>Clear month</button></div>
+  </section>`;
+  if(!S.cards.length&&!S.loading){
+    html+=`<div class="empty-state" style="margin-top:16px"><h3>Add your cards to start rotating</h3>
+      <p>Your wallet is empty. Add each card once with its issuer, network and last four digits, then pick this month's cards here.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center"><button class="btn primary" data-act="getstarted">Import cards and history</button><button class="btn" data-act="addcard">Add a card</button><button class="btn" data-act="bulk">Paste a list</button></div></div>`;
+    return html;
+  }
+  html+=`<div class="people" style="margin-top:16px">`;
+  for(const p of pids()){
+    const keys=slotKeys(S.month).filter(k=>k.p===p);
+    const done=keys.filter(k=>slots[k.key]).length;
+    html+=`<section class="person"><div class="person-head"><h2>${esc(nameOf(p))}</h2><span class="chip ${done===keys.length?"ok":"neutral"}">${done}/${keys.length}</span></div><div class="slots">`;
+    for(const k of keys){
+      const c=cardById(slots[k.key]);
+      const lbl=netLabel(k.net,k.i);
+      if(c){
+        const prev=last[c.id];const gap=prev?mDiff(prev,S.month):null;
+        const note=c.bt?`<span style="color:var(--bad)">On balance transfer</span>`:prev?(gap===1?`<span style="color:var(--warn)">Also used ${mShort(prev)}</span>`:`Last used ${mShort(prev)}`):"First time in rotation";
+        html+=`<div class="slot"><span class="label">${lbl}</span>
+          <button class="cc ${c.network} ${st.dupes.has(c.id)?"dupe":""}" data-act="pick" data-key="${k.key}" aria-label="Change ${lbl} card for ${esc(nameOf(p))}">
+            <span class="iss" style="position:relative;z-index:1">${esc(c.issuer)}</span>
+            <span class="nm" style="position:relative;z-index:1">${esc(c.name)}</span>
+            <span class="row"><span class="mono">•• ${esc(c.last4||"····")}</span><span class="net">${NETWORKS[c.network]}</span></span>
+          </button>
+          <div class="slot-meta"><span>${note}</span><button class="linkish" data-act="unset" data-key="${k.key}">Remove</button></div></div>`;
+      }else if(sug[k.key]&&cardById(sug[k.key].id)){
+        const c=cardById(sug[k.key].id);
+        html+=`<div class="slot"><span class="label">${lbl} <span class="chip ok" style="padding:0 8px;margin-left:4px">Suggested</span></span>
+          <button class="cc ${c.network} suggested" data-act="acceptone" data-key="${k.key}" aria-label="Use suggested ${esc(c.name)} for ${esc(nameOf(p))}">
+            <span class="iss" style="position:relative;z-index:1">${esc(c.issuer)}</span>
+            <span class="nm" style="position:relative;z-index:1">${esc(c.name)}</span>
+            <span class="row"><span class="mono">•• ${esc(c.last4||"····")}</span><span class="net">Tap to use</span></span>
+          </button>
+          <div class="slot-meta"><span>${esc(sug[k.key].why)}</span><span style="display:flex;gap:10px"><button class="linkish" data-act="pick" data-key="${k.key}">Pick another</button>${k.net==="any"&&!S.settings.third?`<button class="linkish" data-act="third" data-p="${p}" data-v="0" style="color:var(--muted)">No 3rd card</button>`:""}</span></div></div>`;
+      }else{
+        html+=`<div class="slot"><span class="label">${lbl}</span>
+          <button class="cc empty" data-act="pick" data-key="${k.key}"><span style="font-size:1.4rem;line-height:1">+</span><span>Choose ${lbl}</span></button>
+          <div class="slot-meta"><span>${k.net==="any"?"Any card in rotation":""}</span>${k.net==="any"&&!S.settings.third?`<button class="linkish" data-act="third" data-p="${p}" data-v="0">No 3rd card</button>`:""}</div></div>`;
+      }
+    }
+    if(!hasThird(S.month,p))html+=`<div class="slot"><span class="label">Optional</span><button class="cc empty add3" data-act="third" data-p="${p}" data-v="1"><span style="font-size:1.4rem;line-height:1">+</span><span>Add a 3rd card this month</span></button><div class="slot-meta"><span>Any card in rotation</span></div></div>`;
+    const extra=extrasFor(S.month,p);
+    const exKeys=Object.entries(slots).filter(([k,v])=>v&&k.startsWith(p+"_")&&!slotKeys(S.month).some(x=>x.key===k)&&cardById(v));
+    if(exKeys.length)html+=`</div><div class="extras"><span class="label">Also used this month</span><div class="exlist">${exKeys.map(([k,v])=>{const c=cardById(v);return `<span class="exchip"><span class="swatch ${c.network}" style="width:14px;height:10px"></span>${esc(c.issuer+" "+c.name)}<button class="x" data-act="unset" data-key="${k}" aria-label="Remove ${esc(c.name)}">×</button></span>`}).join("")}</div></div></section>`;
+    else html+=`</div></section>`;
+  }
+  html+=`</div>`;
+  // due-card rule: after idle() unused months, a card must be used the next month
+  const {due,soon}=dueInfo(S.month);
+  const sugBy={};for(const [k,v] of Object.entries(sug))sugBy[v.id]=k.split("_")[0];
+  const openSlots=Object.keys(sug).length;
+  html+=`<section class="panel" style="margin-top:16px"><div class="toolbar"><div><h2>Due in ${MONTHS[Number(S.month.slice(5))-1]}</h2><span class="note">Rule: after ${idle()} months unused, a card must be used in month ${idle()+1}.</span></div>
+    ${due.length?`<span class="chip ${due.length>openSlots?"bad":"warn"}"><span class="dot"></span>${due.length} card${due.length>1?"s":""} due</span>`:`<span class="chip ok"><span class="dot"></span>Nothing due</span>`}</div>`;
+  if(due.length){
+    const notSug=due.filter(d=>!sugBy[d.c.id]).length;
+    if(notSug)html+=`<p class="note" style="color:var(--bad)">${notSug} due card${notSug>1?"s don't":" doesn't"} fit in the regular slots. Add ${notSug>1?"them":"it"} as an extra card so ${notSug>1?"they stay":"it stays"} active.</p>`;
+    html+=`<div class="duelist">${due.map(d=>{const c=d.c;const owner=pids().includes(c.holder)?c.holder:null;const order=owner?[owner,...pids().filter(x=>x!==owner)]:pids();
+      return `<div class="duerow"><span class="swatch ${c.network}"></span><div class="grow"><strong>${esc(c.issuer)} ${esc(c.name)}</strong><div class="note">${d.l?`Last used ${mShort(d.l)} · ${d.gap-1} months unused${d.gap>idle()+1?` · overdue since ${mShort(shiftMonth(d.l,idle()+1))}`:""}`:"Never used"}${owner?" · "+esc(nameOf(owner))+"'s card":""}</div></div>
+        <div class="dueact">${sugBy[c.id]?`<span class="chip ok">Suggested for ${esc(nameOf(sugBy[c.id]))}</span>`:order.map(p=>`<button class="btn" data-act="assign" data-p="${p}" data-id="${c.id}">Add for ${esc(nameOf(p))}</button>`).join("")}</div></div>`}).join("")}</div>`;
+  }
+  if(soon.length)html+=`<p class="note">Due next month if not used now: ${soon.map(d=>esc(d.c.issuer+" "+d.c.name)).join(", ")}.</p>`;
+  html+=`</section>`;
+  const active=S.cards.filter(c=>c.active!==false&&!c.bt);const btN=S.cards.filter(c=>c.bt).length;
+  html+=`<section class="rules" style="margin-top:16px">
+    <div class="rule"><span class="label">Active cards</span><span class="v mono">${active.length}</span><span class="note">${S.cards.filter(c=>c.active===false&&!c.bt).length} paused · ${btN} on balance transfer</span></div>
+    <div class="rule"><span class="label">Due this month</span><span class="v mono" style="color:${due.length?"var(--warn)":"var(--ok)"}">${due.length}</span><span class="note">${soon.length} more due next month</span></div>
+    <div class="rule"><span class="label">Months tracked</span><span class="v mono">${Object.values(S.months).filter(m=>Object.values(m.slots||{}).some(Boolean)).length}</span><span class="note">Suggestions put due cards first</span></div>
+  </section>`;
+  return html;
+}
+
+function viewWallet(){
+  const ua=usageAll();
+  const counts={};S.cards.forEach(c=>counts[c.issuer]=(counts[c.issuer]||0)+1);
+  let list=S.cards.filter(c=>(!S.issuer||c.issuer===S.issuer)&&(!S.btOnly||c.bt)&&(!S.q||(c.name+" "+c.issuer+" "+c.last4+" "+(c.notes||"")).toLowerCase().includes(S.q.toLowerCase())));
+  const sorters={
+    issuer:(a,b)=>a.issuer.localeCompare(b.issuer)||a.name.localeCompare(b.name),
+    name:(a,b)=>a.name.localeCompare(b.name),
+    lru:(a,b)=>(ua.last[a.id]||"0").localeCompare(ua.last[b.id]||"0")||a.name.localeCompare(b.name)
+  };
+  list.sort(sorters[S.sort]);
+  let html=`<section class="panel"><div class="toolbar"><h2>Wallet</h2>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-act="bulklast">Update last used</button><button class="btn" data-act="import" data-mode="file">Import usage</button><button class="btn" data-act="bulk">Paste a list</button><button class="btn primary" data-act="addcard">Add card</button></div></div>`;
+  if(!S.cards.length){
+    html+=`<div class="empty-state"><h3>No cards yet</h3><p>Add each card once. Only the last four digits are stored, never the full number.</p></div></section>`;
+    return html;
+  }
+  html+=`<div class="issuers">${ISSUERS.filter(i=>counts[i]).map(i=>`<button class="chip ${S.issuer===i?"ok":"neutral"}" data-act="issuer" data-v="${esc(i)}" style="cursor:pointer;border:1px solid var(--line)">${esc(i)} <span class="mono">${counts[i]}</span></button>`).join("")}
+    ${S.cards.some(c=>c.bt)?`<button class="chip ${S.btOnly?"bad":"neutral"}" data-act="btfilter" style="cursor:pointer;border:1px solid var(--line)">Balance transfer <span class="mono">${S.cards.filter(c=>c.bt).length}</span></button>`:""}
+    ${S.issuer||S.btOnly?`<button class="linkish" data-act="issuer" data-v="">Show all</button>`:""}</div>
+    <div class="filters"><input class="inp" id="q" type="search" placeholder="Search name, last 4, notes" value="${esc(S.q)}" style="flex:1;min-width:200px">
+    <select class="inp" id="sort"><option value="issuer"${S.sort==="issuer"?" selected":""}>Sort by issuer</option><option value="name"${S.sort==="name"?" selected":""}>Sort by name</option><option value="lru"${S.sort==="lru"?" selected":""}>Least recently used first</option></select></div>
+    <div class="list">`;
+  for(const c of list){
+    const l=ua.last[c.id],gap=l?mDiff(l,thisMonth()):null;
+    const used=(l?`Last used ${mShort(l)} · ${ua.count[c.id]}×`:"Never used")+(!c.bt&&c.btPaidOff?`<br>BT paid off ${mShort(c.btPaidOff)}`:"");
+    const nextDue=l?shiftMonth(l,idle()+1):thisMonth();const dueNow=c.active!==false&&!c.bt&&nextDue<=thisMonth()&&l!==thisMonth();const dorm=dueNow;
+    html+=`<div class="crow ${c.active===false?"inactive":""}">
+      <div style="min-width:0"><div class="name">${esc(c.name)}${c.bt?` <span class="chip bad" style="padding:1px 8px;font-size:.72rem">BT</span>`:""}</div><div class="sub">${esc(c.issuer)} · <span class="mono">•• ${esc(c.last4||"····")}</span>${c.notes?" · "+esc(c.notes):""}</div></div>
+      <div class="hide-sm"><span class="badge ${c.network}">${NETWORKS[c.network]}</span><div class="sub">${c.holder==="joint"||!pids().includes(c.holder)?"Anyone":esc(nameOf(c.holder))}</div></div>
+      <div class="hide-sm sub">${used}${c.bt?`<br><span class="chip bad">Balance transfer${c.btEnds?" · ends "+mShort(c.btEnds):""}</span>`:c.active===false?`<br><span class="chip neutral">Paused</span>`:dorm?`<br><span class="chip warn">Due now</span>`:c.active!==false&&!c.bt?`<br>Use by ${mShort(nextDue)}`:""}</div>
+      <div class="rowact"><button class="btn" data-act="lastused" data-id="${c.id}" aria-label="Update last used for ${esc(c.issuer+" "+c.name)}">Last used</button><button class="btn" data-act="editcard" data-id="${c.id}">Edit</button></div></div>`;
+  }
+  if(!list.length)html+=`<p class="note">No cards match that search.</p>`;
+  html+=`</div></section>`;
+  return html;
+}
+
+function viewHistory(){
+  const anyThird=S.settings.third||Object.values(S.months).some(m=>Object.keys(m.slots||{}).some(k=>k.includes("_any_")&&m.slots[k]));
+  const keys=slotKeys(null,anyThird);
+  const ids=Object.keys(S.months).filter(m=>Object.values(S.months[m].slots||{}).some(Boolean)).sort().reverse();
+  let html=`<section class="panel"><div class="toolbar"><h2>History</h2><span class="note">Select a month to open it</span></div>`;
+  if(!ids.length)return html+`<div class="empty-state"><h3>No months recorded yet</h3><p>Pick cards on This month and they will appear here.</p></div></section>`;
+  html+=`<div class="tscroll"><table><thead><tr><th>Month</th>${keys.map(k=>`<th>${esc(nameOf(k.p))} · ${netLabel(k.net,k.i)}</th>`).join("")}<th>Other cards used</th></tr></thead><tbody>`;
+  for(const id of ids){
+    const s=S.months[id].slots||{};
+    html+=`<tr data-act="gomonth" data-m="${id}"><td><strong>${mShort(id)}</strong></td>${keys.map(k=>{const c=cardById(s[k.key]);return `<td>${c?`${esc(c.name)} <span class="muted mono">${esc(c.last4)}</span>`:`<span class="muted">—</span>`}</td>`}).join("")}<td>${pids().map(p=>{const ex=extrasFor(id,p);return ex.length?`<div><strong>${esc(nameOf(p))}:</strong> ${ex.map(c=>esc(c.name)).join(", ")}</div>`:""}).join("")||`<span class="muted">—</span>`}</td></tr>`;
+  }
+  return html+`</tbody></table></div></section>`;
+}
+
+function setBT(id,on){
+  const c=cardById(id);if(!c)return;
+  const u={...c,bt:on};
+  if(on){u.btStart=thisMonth();u.btEnds=""}else{u.btPaidOff=thisMonth()}
+  saveCard(u);render();
+  toast(on?`${c.issuer} ${c.name} flagged for balance transfer`:`${c.issuer} ${c.name} paid off ${mShort(thisMonth())} and back in rotation`);
+}
+function statusOf(c){return c.bt?"bt":c.active===false?"paused":"rotation"}
+function setStatus(id,st){
+  const c=cardById(id);if(!c)return;const was=statusOf(c);if(was===st)return;
+  const u={...c};
+  if(was==="bt")u.btPaidOff=thisMonth();
+  if(st==="bt"){u.bt=true;u.active=true;u.btStart=thisMonth();u.btEnds=""}
+  else if(st==="paused"){u.bt=false;u.active=false}
+  else{u.bt=false;u.active=true}
+  saveCard(u);render();
+  const nm=c.issuer+" "+c.name;
+  toast(st==="bt"?`${nm} is on balance transfer`:st==="paused"?`${nm} paused`+(was==="bt"?` · BT paid off ${mShort(thisMonth())}`:""):`${nm} back in rotation`+(was==="bt"?` · BT paid off ${mShort(thisMonth())}`:""));
+}
+function viewBT(){
+  const byName=(a,b)=>(PIDS.indexOf(a.holder)-PIDS.indexOf(b.holder))||a.issuer.localeCompare(b.issuer)||a.name.localeCompare(b.name);
+  const onBT=S.cards.filter(c=>c.bt).sort(byName);
+  const paid=S.cards.filter(c=>!c.bt&&c.btPaidOff).sort((a,b)=>b.btPaidOff.localeCompare(a.btPaidOff)||byName(a,b));
+  const latest=paid[0];
+  const who=c=>c.holder==="joint"||!pids().includes(c.holder)?"Anyone":esc(nameOf(c.holder));
+  const mi=(c,f)=>`<input class="inp" type="month" data-btfield="${f}" data-id="${c.id}" value="${esc(c[f]||"")}" aria-label="${f}" style="width:100%;max-width:170px">`;
+  const paused=S.cards.filter(c=>c.active===false&&!c.bt).sort(byName);
+  let h=`<section class="rules">
+    <div class="rule"><span class="label">On balance transfer</span><span class="v mono" style="color:var(--bad)">${onBT.length}</span><span class="note">Left out of the rotation</span></div>
+    <div class="rule"><span class="label">Paused</span><span class="v mono" style="color:var(--muted)">${paused.length}</span><span class="note">Left out until you turn them back on</span></div>
+    <div class="rule"><span class="label">Latest payoff</span><span class="v">${latest?mLabel(latest.btPaidOff):"None yet"}</span><span class="note">${latest?esc(latest.issuer+" "+latest.name)+" · "+who(latest):"Mark a card paid off below"}</span></div>
+  </section>`;
+  h+=`<section class="panel" style="margin-top:16px"><div class="toolbar"><h2>On balance transfer now</h2></div>`;
+  if(!onBT.length)h+=`<p class="note">No cards are on a balance transfer. Flag one in the list at the bottom.</p>`;
+  else h+=`<div class="tscroll"><table style="min-width:640px"><thead><tr><th>Card</th><th>Who</th><th>Started</th><th>Promo ends</th><th></th></tr></thead><tbody class="static">${onBT.map(c=>`<tr><td><strong>${esc(c.name)}</strong><div class="note">${esc(c.issuer)}${c.last4?" · ••"+esc(c.last4):""}</div></td><td>${who(c)}</td><td>${mi(c,"btStart")}</td><td>${mi(c,"btEnds")}</td><td style="text-align:right"><button class="btn" data-act="btoff" data-id="${c.id}">Mark paid off</button></td></tr>`).join("")}</tbody></table></div>`;
+  h+=`</section>`;
+  h+=`<section class="panel" style="margin-top:16px"><div class="toolbar"><h2>Paused</h2><span class="note">Bills, cards you're closing, or cards you don't want suggested</span></div>`;
+  if(!paused.length)h+=`<p class="note">No paused cards.</p>`;
+  else h+=`<div class="tscroll"><table style="min-width:600px"><thead><tr><th>Card</th><th>Who</th><th>Reason</th><th></th></tr></thead><tbody class="static">${paused.map(c=>`<tr><td><strong>${esc(c.name)}</strong><div class="note">${esc(c.issuer)}${c.last4?" · ••"+esc(c.last4):""}</div></td><td>${who(c)}</td><td><input class="inp" data-cardfield="notes" data-id="${c.id}" value="${esc(c.notes||"")}" placeholder="e.g. AT&amp;T bill" maxlength="120" style="width:100%" aria-label="Reason"></td><td style="text-align:right"><button class="btn" data-act="setst" data-st="rotation" data-id="${c.id}">Back to rotation</button></td></tr>`).join("")}</tbody></table></div>`;
+  h+=`</section>`;
+  h+=`<section class="panel" style="margin-top:16px"><div class="toolbar"><h2>Paid off</h2><span class="note">Latest first · edit the month if it's off</span></div>`;
+  if(!paid.length)h+=`<p class="note">No payoffs recorded yet.</p>`;
+  else h+=`<div class="tscroll"><table style="min-width:600px"><thead><tr><th>Card</th><th>Who</th><th>Paid off</th><th>Status</th><th></th></tr></thead><tbody class="static">${paid.map((c,i)=>`<tr><td><strong>${esc(c.name)}</strong>${i===0?` <span class="chip ok" style="padding:0 8px">Latest</span>`:""}<div class="note">${esc(c.issuer)}${c.last4?" · ••"+esc(c.last4):""}</div></td><td>${who(c)}</td><td>${mi(c,"btPaidOff")}</td><td>${c.active===false?`<span class="chip neutral">Paused</span>`:`<span class="chip ok">In rotation</span>`}</td><td style="text-align:right"><button class="btn" data-act="bton" data-id="${c.id}">Start new transfer</button></td></tr>`).join("")}</tbody></table></div>`;
+  h+=`</section>`;
+  h+=`<section class="panel" style="margin-top:16px"><div class="toolbar"><h2>Set each card</h2><span class="note">In rotation, on balance transfer (BT), or paused</span></div>`;
+  for(const p of [...pids(),"joint"]){
+    const list=S.cards.filter(c=>p==="joint"?(c.holder==="joint"||!pids().includes(c.holder)):c.holder===p).sort(byName);
+    if(!list.length)continue;
+    h+=`<div class="label" style="margin-top:4px">${p==="joint"?"Anyone":esc(nameOf(p))}</div><div class="btgrid">${list.map(c=>{const st=statusOf(c);return `<div class="stcard st-${st}"><div class="grow"><strong>${esc(c.issuer)} ${esc(c.name)}</strong><span class="note" style="display:block">${st==="bt"?"On balance transfer"+(c.btStart?" since "+mShort(c.btStart):""):st==="paused"?"Paused"+(c.notes?" · "+esc(c.notes):""):c.btPaidOff?"In rotation · BT paid off "+mShort(c.btPaidOff):"In rotation"}</span></div>
+      <div class="seg3" role="radiogroup" aria-label="Status of ${esc(c.issuer+" "+c.name)}">${[["rotation","On"],["bt","BT"],["paused","Paused"]].map(([k,l])=>`<button role="radio" aria-checked="${st===k}" data-act="setst" data-st="${k}" data-id="${c.id}" class="s-${k}">${l}</button>`).join("")}</div></div>`}).join("")}</div>`;
+  }
+  h+=`</section>`;
+  return h;
+}
+
+function viewSettings(){
+  const s=S.settings;
+  return `<section class="panel"><h2>Settings</h2>
+    <div class="grid2">
+      <div class="field"><label for="pcount">How many people use these cards</label><select class="inp" id="pcount">${[1,2,3,4,5,6,7,8].map(n=>`<option${people().length===n?" selected":""}>${n}</option>`).join("")}</select></div>
+      ${people().map((x,i)=>`<div class="field"><label for="n-${x.id}">Person ${i+1}</label><input class="inp" id="n-${x.id}" data-pname="${x.id}" value="${esc(x.name)}" maxlength="40"></div>`).join("")}
+      <div class="field"><label for="per-amex">Amex cards per person each month</label><select class="inp" id="per-amex">${[1,2,3].map(n=>`<option${s.per.amex===n?" selected":""}>${n}</option>`).join("")}</select></div>
+      <div class="field"><label for="per-visa">Visa cards per person each month</label><select class="inp" id="per-visa">${[1,2,3].map(n=>`<option${s.per.visa===n?" selected":""}>${n}</option>`).join("")}</select></div>
+    </div>
+    <div class="field"><label for="idle">Longest a card can go unused</label><select class="inp" id="idle" style="max-width:260px">${[1,2,3,4,5,6].map(n=>`<option value="${n}"${idle()===n?" selected":""}>${n} month${n>1?"s":""} (must be used in month ${n+1})</option>`).join("")}</select></div>
+    <div class="field"><label>3rd card</label>
+      <div class="seg" role="group"><button data-act="thirdall" data-v="0" aria-pressed="${!s.third}">Add when needed</button><button data-act="thirdall" data-v="1" aria-pressed="${!!s.third}">Every month</button></div>
+      <span class="note">A 3rd card slot takes any card in rotation (Amex, Visa, Mastercard or Discover). Suggestions fill it with the most overdue card.</span></div>
+    <div class="field"><label>Which cards can fill a Visa slot</label>
+      <div class="seg" role="group"><button data-act="visarule" data-v="visa" aria-pressed="${s.visaRule==="visa"}">Visa only</button><button data-act="visarule" data-v="nonamex" aria-pressed="${s.visaRule==="nonamex"}">Any non-Amex card</button></div>
+      <span class="note">Use "Any non-Amex card" if you also want Mastercard and Discover cards to count toward the Visa slot.</span></div>
+    <p class="note">${S.localMode?"Settings are saved on this device.":"Settings are shared, so everyone sees the same rules."} Changes save automatically.</p>
+  </section>
+  <section class="panel" style="margin-top:16px"><h2>Your data</h2>
+    <div class="optgrid">
+      <button class="opt" data-act="import" data-mode="file"><span class="opt-t">Import past usage</span><span class="note">From an Excel or CSV file, a screenshot, or pasted text</span></button>
+      <button class="opt" data-act="rerunsetup"><span class="opt-t">Run setup again</span><span class="note">Change family members and the monthly rule step by step</span></button>
+      <button class="opt" data-act="exportjson"><span class="opt-t">Back up or move your data</span><span class="note">Copy everything as one block of text, or restore from a backup</span></button>
+    </div>
+  </section>`;
+}
+
+/* ---------- modals ---------- */
+function openModal(html,onMount){const r=$("#modal-root");r.innerHTML=`<div class="overlay" data-act="closeoverlay"><div class="modal" role="dialog" aria-modal="true">${html}</div></div>`;onMount&&onMount(r);const f=r.querySelector("[autofocus]")||r.querySelector("button,input,select");f&&f.focus()}
+function closeModal(){$("#modal-root").innerHTML=""}
+
+function openPicker(key){
+  const [p,net]=key.split("_");
+  const slots=slotsFor(S.month);const cur=slots[key];
+  const taken={};for(const [k,v] of Object.entries(slots))if(v&&k!==key)taken[v]=k;
+  const {last}=usage();
+  const render_=()=>{
+    let cards=S.cards.filter(c=>eligible(c,net));
+    const mine=cards.filter(c=>c.holder===p||c.holder==="joint"||!c.holder);
+    const pool=(S.showAll||!mine.length)?cards:mine;
+    pool.sort((a,b)=>(last[a.id]||"0").localeCompare(last[b.id]||"0")||a.name.localeCompare(b.name));
+    const firstFree=pool.find(c=>!taken[c.id]);
+    const lbl=netLabel(net,Number(key.split("_")[2]));
+    let h=`<div class="modal-h"><div><span class="label">${esc(nameOf(p))} · ${mLabel(S.month)}</span><h2>Choose ${lbl} card</h2></div><button class="icon-btn" data-act="close" aria-label="Close">×</button></div><div class="modal-b">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><span class="note">Least recently used first</span>
+      <label class="note" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="showall" ${S.showAll?"checked":""}> Include ${people().length>2?"everyone":esc(nameOf(pids().find(x=>x!==p)||p))}'s cards</label></div>`;
+    if(!pool.length)h+=`<div class="empty-state"><p>No active ${lbl} cards ${S.showAll?"":"for "+esc(nameOf(p))+" "}yet.${net==="visa"&&S.settings.visaRule==="visa"?" Settings can let Mastercard and Discover cards fill this slot.":""}</p></div>`;
+    for(const c of pool){
+      const t=taken[c.id];const l=last[c.id];
+      const whoT=t?nameOf(t.split("_")[0]):"";
+      h+=`<button class="pick ${c===firstFree?"top-pick":""}" data-act="choose" data-id="${c.id}" ${t?"disabled":""}>
+        <span class="swatch ${c.network}"></span>
+        <span class="grow"><strong>${esc(c.name)}</strong> <span class="mono muted">•• ${esc(c.last4||"····")}</span><br>
+        <span class="note">${esc(c.issuer)} · ${t?"Already picked for "+esc(whoT):l?"Last used "+mShort(l):"Never used"}${c.holder&&c.holder!=="joint"&&c.holder!==p?" · "+esc(nameOf(c.holder))+"'s card":""}</span></span>
+        ${c===firstFree?`<span class="chip ok">Suggested</span>`:c.id===cur?`<span class="chip neutral">Current</span>`:""}</button>`;
+    }
+    h+=`</div>`;
+    return h;
+  };
+  const mount=()=>openModal(render_(),r=>{
+    r.querySelector("#showall")?.addEventListener("change",e=>{S.showAll=e.target.checked;mount()});
+    r.querySelectorAll("[data-act=choose]").forEach(b=>b.addEventListener("click",()=>{S.months[S.month]={...(S.months[S.month]||{}),slots:{...slots,[key]:b.dataset.id}};closeModal();saveMonth(S.month);toast("Card set for "+nameOf(p))}));
+  });
+  mount();
+}
+
+/* ---------- update last used ---------- */
+function usesOf(id){
+  const out=[];
+  for(const [mid,m] of Object.entries(S.months))for(const [k,v] of Object.entries(m.slots||{}))if(v===id)out.push({mid,key:k,p:k.split("_")[0]});
+  return out.sort((a,b)=>b.mid.localeCompare(a.mid));
+}
+function addUse(mid,p,id){
+  const c=cardById(id);if(!c||!/^\d{4}-\d{2}$/.test(mid||""))return false;
+  const slots={...slotsFor(mid)};if(Object.values(slots).includes(id))return false;
+  placeCard(slots,mid,p,c);S.months[mid]={...(S.months[mid]||{}),slots};saveMonth(mid);return true;
+}
+function removeUse(mid,key){const slots={...slotsFor(mid)};delete slots[key];S.months[mid]={...(S.months[mid]||{}),slots};saveMonth(mid)}
+function personSelect(id,sel){return `<select class="inp" id="${id}">${pids().map(p=>`<option value="${p}"${p===sel?" selected":""}>${esc(nameOf(p))}</option>`).join("")}</select>`}
+function openUsage(id){
+  const c=cardById(id);if(!c)return;
+  const defP=pids().includes(c.holder)?c.holder:pids()[0];
+  const mount=()=>{const uses=usesOf(id);const last=uses[0];
+    openModal(`<div class="modal-h"><div><span class="label">Last used · ${esc(c.issuer)}</span><h2>${esc(c.name)}</h2></div><button class="icon-btn" data-act="close" aria-label="Close">×</button></div>
+    <div class="modal-b">
+      <div class="rule"><span class="label">Last used</span><span class="v">${last?mLabel(last.mid):"Never used"}</span><span class="note">${last?"By "+esc(nameOf(last.p))+" · "+uses.length+" use"+(uses.length>1?"s":"")+" recorded":"Record the most recent month this card was used"}</span></div>
+      <div class="field"><label>Record a use</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><input class="inp" type="month" id="u-month" value="${thisMonth()}" max="${thisMonth()}" aria-label="Month used">${personSelect("u-who",defP)}<button class="btn primary" id="u-add">Record use</button></div>
+        <span class="note">Adds the card to that month’s history for that person. Suggestions and due dates update right away.</span></div>
+      <div class="field"><label>Recorded uses</label>
+        ${uses.length?`<div class="exlist">${uses.map(u=>`<span class="exchip">${mShort(u.mid)} · ${esc(nameOf(u.p))}<button class="x" data-rm="${u.mid}|${u.key}" aria-label="Remove ${mShort(u.mid)}">×</button></span>`).join("")}</div><span class="note">Remove a month that’s wrong to correct the last used date.</span>`:`<p class="note">No uses recorded yet.</p>`}</div>
+    </div>
+    <div class="modal-f"><span></span><button class="btn" data-act="close">Done</button></div>`,r=>{
+      r.querySelector("#u-add").addEventListener("click",()=>{const mid=r.querySelector("#u-month").value,p=r.querySelector("#u-who").value;
+        if(!mid){toast("Choose a month first");return}
+        if(addUse(mid,p,id)){toast(`${c.name}: used ${mShort(mid)} by ${nameOf(p)}`);mount()}else toast(`Already recorded for ${mShort(mid)}`)});
+      r.querySelectorAll("[data-rm]").forEach(b=>b.addEventListener("click",()=>{const [mid,key]=b.dataset.rm.split("|");removeUse(mid,key);toast(`Removed ${mShort(mid)}`);mount()}));
+    });};
+  mount();
+}
+function openBulkLast(){
+  const ua=usageAll();
+  const list=S.cards.slice().sort((a,b)=>(PIDS.indexOf(a.holder)-PIDS.indexOf(b.holder))||a.issuer.localeCompare(b.issuer)||a.name.localeCompare(b.name));
+  openModal(`<div class="modal-h"><div><span class="label">Wallet</span><h2>Update last used</h2></div><button class="icon-btn" data-act="close" aria-label="Close">×</button></div>
+    <div class="modal-b">
+      <p class="note">Set the month each card was last used. Leave a row blank to keep it as it is. Each month you set is added to that card’s history.</p>
+      <div class="tscroll"><table style="min-width:620px"><thead><tr><th>Card</th><th>Last used now</th><th>Used in</th><th>By</th></tr></thead><tbody class="static">
+      ${list.map(c=>{const l=ua.last[c.id];const defP=pids().includes(c.holder)?c.holder:pids()[0];return `<tr${c.active===false||c.bt?' class="inactive"':""}><td><strong>${esc(c.name)}</strong><div class="note">${esc(c.issuer)}${c.bt?" · BT":c.active===false?" · Paused":""}</div></td><td>${l?mShort(l):`<span class="muted">Never</span>`}</td><td><input class="inp" type="month" data-bl="${c.id}" max="${thisMonth()}" aria-label="Month ${esc(c.name)} was used" style="max-width:170px"></td><td>${personSelect("bl-who-"+c.id,defP)}</td></tr>`}).join("")}
+      </tbody></table></div>
+    </div>
+    <div class="modal-f"><span class="note" id="bl-count">No changes yet</span><div style="display:flex;gap:8px"><button class="btn" data-act="close">Cancel</button><button class="btn primary" id="bl-save" disabled>Save</button></div></div>`,r=>{
+    r.querySelector(".modal").classList.add("wide");
+    const ins=[...r.querySelectorAll("[data-bl]")];const cnt=r.querySelector("#bl-count"),btn=r.querySelector("#bl-save");
+    const upd=()=>{const n=ins.filter(i=>i.value).length;cnt.textContent=n?`${n} card${n>1?"s":""} to update`:"No changes yet";btn.disabled=!n};
+    ins.forEach(i=>i.addEventListener("input",upd));ins.forEach(i=>i.addEventListener("change",upd));
+    btn.addEventListener("click",()=>{let n=0,same=0;for(const i of ins){if(!i.value)continue;const p=r.querySelector("#bl-who-"+i.dataset.bl).value;if(addUse(i.value,p,i.dataset.bl))n++;else same++}
+      closeModal();render();toast(`Updated ${n} card${n===1?"":"s"}${same?` · ${same} already recorded`:""}`)});
+  });
+}
+
+function openCardForm(card){
+  const c=card||{issuer:"American Express",name:"",network:"amex",last4:"",holder:"joint",active:true,notes:""};
+  const isNew=!card;
+  openModal(`<form id="cardform"><div class="modal-h"><h2>${isNew?"Add card":"Edit card"}</h2><button type="button" class="icon-btn" data-act="close" aria-label="Close">×</button></div>
+    <div class="modal-b">
+      <div class="grid2">
+        <div class="field"><label for="f-issuer">Issuer</label><select class="inp" id="f-issuer">${ISSUERS.map(i=>`<option${c.issuer===i?" selected":""}>${i}</option>`).join("")}</select></div>
+        <div class="field"><label for="f-network">Network</label><select class="inp" id="f-network">${Object.entries(NETWORKS).map(([k,v])=>`<option value="${k}"${c.network===k?" selected":""}>${v}</option>`).join("")}</select></div>
+      </div>
+      <div class="field"><label for="f-name">Card name</label><input class="inp" id="f-name" required maxlength="60" placeholder="e.g. Sapphire Preferred" value="${esc(c.name)}" autofocus></div>
+      <div class="grid2">
+        <div class="field"><label for="f-last4">Last 4 digits</label><input class="inp mono" id="f-last4" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" placeholder="1234" value="${esc(c.last4)}"></div>
+        <div class="field"><label for="f-holder">Who uses it</label><select class="inp" id="f-holder"><option value="joint"${c.holder==="joint"?" selected":""}>Anyone</option>${people().map(x=>`<option value="${x.id}"${c.holder===x.id?" selected":""}>${esc(nameOf(x.id))}</option>`).join("")}</select></div>
+      </div>
+      <div class="field"><label for="f-notes">Notes</label><input class="inp" id="f-notes" maxlength="120" placeholder="e.g. Annual fee in March, 5% categories" value="${esc(c.notes)}"></div>
+      <label class="note" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="f-active" ${c.active!==false?"checked":""}> In rotation (uncheck to pause a card)</label>
+      <div class="field" style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;gap:8px">
+        <label style="display:flex;gap:8px;align-items:center;font-weight:600"><input type="checkbox" id="f-bt" ${c.bt?"checked":""}> Used for a balance transfer</label>
+        <span class="note">Balance transfer cards are left out of the monthly rotation and never suggested.</span>
+        <div class="grid2" id="f-btends-wrap" ${c.bt?"":"hidden"}>
+          <div class="field"><label for="f-btstart">Transfer started</label><input class="inp" id="f-btstart" type="month" value="${esc(c.btStart||"")}"></div>
+          <div class="field"><label for="f-btends">Promo rate ends</label><input class="inp" id="f-btends" type="month" value="${esc(c.btEnds||"")}"></div>
+        </div>
+        <div class="field"><label for="f-btpaid">Last balance transfer paid off</label><input class="inp" id="f-btpaid" type="month" value="${esc(c.btPaidOff||"")}" style="max-width:220px"></div>
+      </div>
+      <p class="note">Only the last four digits are saved. Never enter a full card number.</p>
+    </div>
+    <div class="modal-f">${isNew?"<span></span>":`<button type="button" class="btn danger" id="delbtn">Delete card</button>`}
+      <div style="display:flex;gap:8px"><button type="button" class="btn" data-act="close">Cancel</button><button type="submit" class="btn primary">${isNew?"Add card":"Save"}</button></div></div></form>`,r=>{
+    const iss=r.querySelector("#f-issuer"),net=r.querySelector("#f-network");
+    iss.addEventListener("change",()=>{if(iss.value==="American Express")net.value="amex";else if(iss.value==="Discover")net.value="discover";else if(net.value==="amex"||net.value==="discover")net.value="visa"});
+    r.querySelector("#f-bt").addEventListener("change",e=>r.querySelector("#f-btends-wrap").hidden=!e.target.checked);
+    r.querySelector("#f-last4").addEventListener("input",e=>e.target.value=e.target.value.replace(/\D/g,"").slice(0,4));
+    const del=r.querySelector("#delbtn");
+    if(del)del.addEventListener("click",()=>{if(!del.classList.contains("armed")){del.classList.add("armed");del.textContent="Tap again to delete";return}deleteCard(card.id);closeModal();render();toast("Card deleted")});
+    r.querySelector("#cardform").addEventListener("submit",e=>{e.preventDefault();
+      const name=r.querySelector("#f-name").value.trim();if(!name)return;
+      saveCard({...c,issuer:iss.value,network:net.value,name,last4:r.querySelector("#f-last4").value,holder:r.querySelector("#f-holder").value,notes:r.querySelector("#f-notes").value.trim(),bt:r.querySelector("#f-bt").checked,btEnds:r.querySelector("#f-bt").checked?r.querySelector("#f-btends").value:"",btStart:r.querySelector("#f-bt").checked?r.querySelector("#f-btstart").value:"",btPaidOff:r.querySelector("#f-btpaid").value,active:r.querySelector("#f-active").checked});
+      closeModal();render();toast(isNew?"Card added":"Card saved");});
+  });
+}
+
+function parseIssuer(s){s=s.trim().toLowerCase();if(/^(amex|american express|ae)$/.test(s))return"American Express";if(s.startsWith("apple"))return"Apple";if(s.startsWith("bofa")||s.startsWith("bank of am")||s==="boa")return"Bank of America";if(s.startsWith("barclay"))return"Barclays";if(s.startsWith("citi"))return"Citi";if(s.startsWith("chase"))return"Chase";if(s.startsWith("cap"))return"Capital One";if(s.startsWith("disc"))return"Discover";if(s.startsWith("us bank")||s==="usb")return"US Bank";if(s.startsWith("wells"))return"Wells Fargo";return null}
+function parseNetwork(s,issuer){s=(s||"").trim().toLowerCase();if(s.startsWith("amex")||s.startsWith("american"))return"amex";if(s.startsWith("visa"))return"visa";if(s.startsWith("master")||s==="mc")return"mastercard";if(s.startsWith("disc"))return"discover";return issuer==="American Express"?"amex":issuer==="Discover"?"discover":"visa"}
+function parseHolder(s){s=(s||"").trim().toLowerCase();if(!s)return"joint";const x=people().find(x=>x.name.trim().toLowerCase()===s);return x?x.id:"joint"}
+function parseBulk(text){
+  const out=[],bad=[];
+  text.split(/\r?\n/).forEach((line,i)=>{if(!line.trim())return;const parts=line.split(/\t|\||,/).map(x=>x.trim());
+    const issuer=parseIssuer(parts[0]||"");if(!issuer||!parts[1]){bad.push(i+1);return}
+    const last4=(parts[3]||"").replace(/\D/g,"").slice(-4);
+    out.push({issuer,name:parts[1],network:parseNetwork(parts[2],issuer),last4,holder:parseHolder(parts[4]),active:true,notes:""});});
+  return {out,bad};
+}
+function openBulk(){
+  openModal(`<div class="modal-h"><h2>Paste a list of cards</h2><button class="icon-btn" data-act="close" aria-label="Close">×</button></div>
+    <div class="modal-b"><p class="note">One card per line: <span class="mono">Issuer, Card name, Network, Last 4, Who</span>. Network, last 4 and who are optional. Who can be ${people().map(x=>`"${esc(nameOf(x.id))}"`).join(", ")} or blank for anyone.</p>
+    <textarea class="inp mono" id="bulk" rows="9" placeholder="Amex, Gold Card, Amex, 1004, ${esc(nameOf(pids()[0]))}&#10;Chase, Freedom Unlimited, Visa, 4421&#10;Citi, Double Cash, Mastercard, 8830, ${esc(nameOf(pids()[pids().length-1]))}" style="resize:vertical"></textarea>
+    <div id="bulkprev" class="note">Nothing to add yet.</div></div>
+    <div class="modal-f"><span></span><div style="display:flex;gap:8px"><button class="btn" data-act="close">Cancel</button><button class="btn primary" id="bulkgo" disabled>Add cards</button></div></div>`,r=>{
+    const ta=r.querySelector("#bulk"),pv=r.querySelector("#bulkprev"),go=r.querySelector("#bulkgo");let parsed={out:[],bad:[]};
+    ta.addEventListener("input",()=>{parsed=parseBulk(ta.value);pv.innerHTML=parsed.out.length?`Ready to add <strong>${parsed.out.length}</strong> card${parsed.out.length>1?"s":""}: ${parsed.out.slice(0,6).map(c=>esc(c.name)).join(", ")}${parsed.out.length>6?"…":""}`:"Nothing to add yet.";if(parsed.bad.length)pv.innerHTML+=`<br><span style="color:var(--bad)">Couldn't read line${parsed.bad.length>1?"s":""} ${parsed.bad.join(", ")}. Start each line with Amex, Citi, Chase, Capital One or Discover, then the card name.</span>`;go.disabled=!parsed.out.length;go.textContent=parsed.out.length?`Add ${parsed.out.length} card${parsed.out.length>1?"s":""}`:"Add cards"});
+    go.addEventListener("click",()=>{parsed.out.forEach(saveCard);closeModal();render();toast(`Added ${parsed.out.length} cards`)});
+  });
+}
+
+function usageBefore(mid){
+  const last={},count={};
+  for(const [m,doc] of Object.entries(S.months)){if(m>=mid)continue;
+    for(const cid of Object.values(doc.slots||{})){if(!cid)continue;count[cid]=(count[cid]||0)+1;if(!last[cid]||m>last[cid])last[cid]=m}}
+  return {last,count};
+}
+function suggest(mid){
+  const slots=slotsFor(mid);const {last,count}=usageBefore(mid);
+  const used=new Set(Object.values(slots).filter(Boolean));const out={};
+  const rank=(a,b)=>(last[a.id]||"0").localeCompare(last[b.id]||"0")||(count[a.id]||0)-(count[b.id]||0)||a.name.localeCompare(b.name);
+  const own=(c,p)=>c.holder===p||c.holder==="joint"||!c.holder||!pids().includes(c.holder);
+  const empty=slotKeys(mid).filter(k=>!(slots[k.key]&&cardById(slots[k.key])));
+  // owners pick from their own cards first; borrowed cards are assigned last
+  const hasOwn=k=>S.cards.some(c=>eligible(c,k.net)&&own(c,k.p));
+  for(const k of [...empty.filter(k=>k.net!=="any"&&hasOwn(k)),...empty.filter(k=>k.net!=="any"&&!hasOwn(k)),...empty.filter(k=>k.net==="any")]){
+    let pool=S.cards.filter(c=>eligible(c,k.net)&&!used.has(c.id)&&own(c,k.p)).sort(rank);
+    let borrowed=false;
+    if(!pool.length){pool=S.cards.filter(c=>eligible(c,k.net)&&!used.has(c.id)).sort(rank);borrowed=true}
+    if(pool[0]){const c=pool[0];used.add(c.id);
+      const l=last[c.id];
+      out[k.key]={id:c.id,why:(l?`Not used since ${mShort(l)}`:"Never used")+(c.btPaidOff?` · BT paid off ${mShort(c.btPaidOff)}`:"")+(borrowed?` · ${nameOf(c.holder)}'s card`:"")};}
+  }
+  return out;
+}
+function acceptSuggestions(only){
+  const sug=suggest(S.month);const keys=only?[only]:Object.keys(sug);
+  if(!keys.length||!sug[keys[0]]){toast("No suggestions left for the empty slots");return}
+  const slots={...slotsFor(S.month)};keys.forEach(k=>{if(sug[k])slots[k]=sug[k].id});
+  S.months[S.month]={...(S.months[S.month]||{}),slots};saveMonth(S.month);
+  toast(only?"Suggestion used":`Used ${keys.length} suggestion${keys.length>1?"s":""}`);
+}
+
+/* ---------- onboarding ---------- */
+function setCount(n){
+  const cur=people().slice(0,n);
+  for(let i=cur.length;i<n;i++)cur.push({id:PIDS.find(id=>!cur.some(x=>x.id===id)),name:""});
+  S.settings.people=cur;
+}
+function closeSetup(){S.setupOpen=false;closeModal()}
+function openSetup(force){
+  if(S.setupOpen)return;S.setupOpen=true;
+  const draft={people:people().map(x=>({...x})),per:{...S.settings.per},idle:idle(),third:!!S.settings.third};
+  let step=1;
+  const dots=()=>`<div class="steps" aria-label="Step ${step} of 2"><span class="${step>=1?"on":""}"></span><span class="${step>=2?"on":""}"></span></div>`;
+  const body=()=>step===1?`<form id="setupform"><div class="modal-h"><div><span class="label">Step 1 of 2 · Your family</span><h2>How many family members will use these cards?</h2></div>${force?`<button type="button" class="icon-btn" data-act="setupcancel" aria-label="Close">×</button>`:""}</div>
+    <div class="modal-b">
+      <div class="counter" role="group" aria-label="Number of family members">${[1,2,3,4,5,6].map(n=>`<button type="button" class="cnt" data-n="${n}" aria-pressed="${draft.people.length===n}">${n}</button>`).join("")}</div>
+      <p class="note">Each family member gets their own cards to use every month.</p>
+      <div class="grid2">${draft.people.map((x,i)=>`<div class="field"><label for="s-n-${x.id}">Family member ${i+1}</label><input class="inp" id="s-n-${x.id}" data-sid="${x.id}" value="${esc(x.name)}" maxlength="40" placeholder="First name" required></div>`).join("")}</div>
+    </div>
+    <div class="modal-f">${dots()}<button type="submit" class="btn primary">Next</button></div></form>`
+  :`<form id="setupform"><div class="modal-h"><div><span class="label">Step 2 of 2 · Monthly rule</span><h2>Which cards does each person use each month?</h2></div>${force?`<button type="button" class="icon-btn" data-act="setupcancel" aria-label="Close">×</button>`:""}</div>
+    <div class="modal-b">
+      <div class="grid2">
+        <div class="field"><label for="s-amex">Amex cards per person</label><select class="inp" id="s-amex">${[1,2,3].map(n=>`<option${draft.per.amex===n?" selected":""}>${n}</option>`).join("")}</select></div>
+        <div class="field"><label for="s-visa">Visa cards per person</label><select class="inp" id="s-visa">${[1,2,3].map(n=>`<option${draft.per.visa===n?" selected":""}>${n}</option>`).join("")}</select></div>
+      </div>
+      <div class="field"><label for="s-idle">Longest a card can go unused</label><select class="inp" id="s-idle">${[1,2,3,4,5,6].map(n=>`<option value="${n}"${draft.idle===n?" selected":""}>${n} month${n>1?"s":""} (then it must be used in month ${n+1})</option>`).join("")}</select></div>
+      <label class="note" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="s-third" ${draft.third?"checked":""}> Give everyone a 3rd card slot every month</label>
+      <p class="note">You can change any of this later in Settings.</p>
+    </div>
+    <div class="modal-f">${dots()}<div style="display:flex;gap:8px"><button type="button" class="btn" data-act="setupback">Back</button><button type="submit" class="btn primary">Finish setup</button></div></div></form>`;
+  const mount=()=>{S.setupOpen=false;openModal(body(),r=>{S.setupOpen=true;
+    r.querySelectorAll("[data-sid]").forEach(inp=>inp.addEventListener("input",()=>{draft.people.find(x=>x.id===inp.dataset.sid).name=inp.value}));
+    r.querySelectorAll(".cnt").forEach(b=>b.addEventListener("click",()=>{const n=Number(b.dataset.n);draft.people.length=Math.min(draft.people.length,n);for(let i=draft.people.length;i<n;i++)draft.people.push({id:PIDS.find(id=>!draft.people.some(x=>x.id===id)),name:""});mount();const f=r.querySelector("[data-sid]:placeholder-shown");f&&f.focus()}));
+    r.querySelector("[data-act=setupback]")?.addEventListener("click",()=>{step=1;mount()});
+    r.querySelector("[data-act=setupcancel]")?.addEventListener("click",()=>closeSetup());
+    r.querySelector("#setupform").addEventListener("submit",e=>{e.preventDefault();
+      if(step===1){step=2;mount();return}
+      draft.per={amex:Number(r.querySelector("#s-amex").value),visa:Number(r.querySelector("#s-visa").value)};
+      draft.idle=Number(r.querySelector("#s-idle").value);draft.third=r.querySelector("#s-third").checked;
+      S.settings.people=draft.people.map(x=>({id:x.id,name:x.name.trim()}));
+      S.settings.per=draft.per;S.settings.idle=draft.idle;S.settings.third=draft.third;
+      S.settings.setupDone=true;clearTimeout(setTimer);
+      if(S.db)queue("settings/main",()=>S.db.doc("settings/main").set(JSON.parse(JSON.stringify(S.settings))));
+      closeSetup();render();
+      if(!force||!S.cards.length)openGetStarted();else toast("Setup saved");});
+  })};
+  mount();
+}
+function openGetStarted(){
+  openModal(`<div class="modal-h"><div><span class="label">Almost done</span><h2>Bring in your cards and history</h2></div><button class="icon-btn" data-act="close" aria-label="Close">×</button></div>
+    <div class="modal-b">
+      <p class="note">Load what you already track so suggestions know which cards are due. An import also adds any cards it finds.</p>
+      <div class="optgrid">
+        <button class="opt" data-act="import" data-mode="file"><span class="opt-t">Excel or CSV file</span><span class="note">A spreadsheet with one row per card and the months it was used</span></button>
+        <button class="opt" data-act="import" data-mode="photo" ${S.sample&&S.sampleImages?"":"hidden"}><span class="opt-t">Screenshot</span><span class="note">A picture of your tracking sheet. Claude reads it for you.</span></button>
+        <button class="opt" data-act="import" data-mode="text"><span class="opt-t">Paste text</span><span class="note">Copy rows from a sheet or type one card per line</span></button>
+        <button class="opt" data-act="bulk"><span class="opt-t">Just add my cards</span><span class="note">Paste a list of cards without any usage history</span></button>
+      </div>
+    </div>
+    <div class="modal-f"><span></span><button class="btn" data-act="close">Skip for now</button></div>`);
+}
+
+/* ---------- import past usage ---------- */
+const MONTH_ALIASES={jan:1,january:1,feb:2,february:2,mar:3,march:3,apr:4,april:4,may:5,jun:6,june:6,jul:7,july:7,aug:8,august:8,sep:9,sept:9,september:9,oct:10,october:10,nov:11,november:11,dec:12,december:12};
+const ISSUER_ALIASES=[["american express","American Express"],["amex","American Express"],["capital one","Capital One"],["cap one","Capital One"],["capone","Capital One"],["bank of america","Bank of America"],["bofa","Bank of America"],["boa","Bank of America"],["u.s. bank","US Bank"],["us bank","US Bank"],["usbank","US Bank"],["wells fargo","Wells Fargo"],["wells","Wells Fargo"],["citibank","Citi"],["citi","Citi"],["chase","Chase"],["discover","Discover"],["apple","Apple"],["barclays","Barclays"],["barclay","Barclays"]];
+const CHECKS=/^(✓|✔|✔️|☑|☑️|✅|x|yes|y|true|bt)$/i;
+function normName(s){return String(s||"").toLowerCase().replace(/\bbiz\b/g,"business").replace(/[^a-z0-9]/g,"")}
+function lev(a,b){const m=a.length,n=b.length;if(Math.abs(m-n)>2)return 9;const d=Array.from({length:m+1},(_,i)=>[i]);for(let j=1;j<=n;j++)d[0][j]=j;for(let i=1;i<=m;i++)for(let j=1;j<=n;j++)d[i][j]=Math.min(d[i-1][j]+1,d[i][j-1]+1,d[i-1][j-1]+(a[i-1]===b[j-1]?0:1));return d[m][n]}
+function takeSeq(words,seq){const lw=words.map(w=>w.toLowerCase());for(let i=0;i+seq.length<=lw.length;i++){if(seq.every((t,k)=>lw[i+k]===t)){words.splice(i,seq.length);return true}}return false}
+function parseLabel(label){
+  const words=String(label).replace(/[,;]/g," ").split(/\s+/).filter(Boolean);
+  let holder=null,issuer=null,last4="";
+  for(const x of people()){const seq=x.name.trim().toLowerCase().split(/\s+/).filter(Boolean);if(seq.length&&takeSeq(words,seq)){holder=x.id;break}}
+  for(const [a,iss] of ISSUER_ALIASES){if(takeSeq(words,a.split(" "))){issuer=iss;break}}
+  const i4=words.findIndex(w=>/^\d{4}$/.test(w));if(i4>=0){last4=words[i4];words.splice(i4,1)}
+  const name=words.join(" ").trim()||issuer||"";
+  return {holder,issuer,last4,name};
+}
+function matchCard(pl,pool){
+  let c=pool.filter(x=>(!pl.issuer||x.issuer===pl.issuer)&&(!pl.holder||x.holder===pl.holder||x.holder==="joint"));
+  if(pl.last4){const h=c.filter(x=>x.last4===pl.last4);if(h.length===1)return h[0]}
+  const n=normName(pl.name);if(!n)return null;
+  let h=c.filter(x=>normName(x.name)===n||normName(x.issuer+x.name)===n);if(h.length===1)return h[0];if(h.length>1)return null;
+  h=c.filter(x=>lev(normName(x.name),n)<=Math.min(2,Math.floor(n.length/4)));if(h.length===1)return h[0];
+  const toks=pl.name.toLowerCase().replace(/\bbiz\b/g,"business").split(/[^a-z0-9]+/).filter(t=>t.length>=3&&!["card","visa"].includes(t));
+  let best=null,bs=0,tie=false;
+  for(const x of c){const xn=normName(x.name);const sc=toks.filter(t=>xn.includes(t)).length;if(sc>bs){bs=sc;best=x;tie=false}else if(sc&&sc===bs)tie=true}
+  return bs&&!tie?best:null;
+}
+function inferMonth(m,y){if(y)return y+"-"+String(m).padStart(2,"0");const [cy,cm]=thisMonth().split("-").map(Number);return (m>cm?cy-1:cy)+"-"+String(m).padStart(2,"0")}
+function parseCell(text,rowHolder){
+  const raw=String(text??"").trim();if(!raw)return null;
+  if(CHECKS.test(raw))return {type:"check"};
+  const toks=raw.toLowerCase().replace(/[().]/g," ").split(/[\s,\/\-]+/).filter(Boolean);
+  let month=null,year=null,p=null;
+  toks.forEach((t,i)=>{if(!month&&MONTH_ALIASES[t]){month=MONTH_ALIASES[t];const nx=toks[i+1];if(nx&&/^(20)?\d{2}$/.test(nx)){const v=Number(nx);year=v<100?2000+v:v}}});
+  const yr=toks.find(t=>/^20\d{2}$/.test(t));if(!year&&yr)year=Number(yr);
+  for(const x of people()){const n=x.name.trim().toLowerCase();if(n&&toks.includes(n)){p=x.id;break}}
+  const isBT=toks.includes("bt")||toks.includes("balance");
+  if(month&&isBT)return {type:"bt",mid:inferMonth(month,year),raw};
+  if(month)return {type:"use",p:p||rowHolder||pids()[0],mid:inferMonth(month,year),raw,guessed:!p};
+  return {type:"note",raw};
+}
+function rowsFromAOA(aoa){
+  const rows=[];let btCol=-1,start=0;
+  for(let i=0;i<Math.min(aoa.length,5);i++){const r=(aoa[i]||[]).map(v=>String(v??"").trim().toLowerCase());
+    if(r.some(v=>v==="bt"||v==="balance transfer")||["concatenate","card","cards","card name","name"].includes(r[0])||r.some(v=>v.startsWith("purchase"))){btCol=r.findIndex(v=>v==="bt"||v==="balance transfer");start=i+1;break}}
+  for(let i=start;i<aoa.length;i++){const r=aoa[i]||[];const label=String(r[0]??"").trim();if(!label)continue;
+    const cells=[];let bt=false;
+    for(let j=1;j<r.length;j++){const v=String(r[j]??"").trim();if(j===btCol){if(v&&(CHECKS.test(v)||v.length<=2))bt=true;continue}cells.push(v)}
+    rows.push({label,bt,cells});}
+  return rows;
+}
+function rowsFromText(text){
+  const lines=String(text).split(/\r?\n/).filter(l=>l.trim());
+  if(lines.some(l=>l.includes("\t")))return rowsFromAOA(lines.map(l=>l.split("\t")));
+  return rowsFromAOA(lines.map(l=>{const k=l.indexOf(":");if(k>0)return [l.slice(0,k),...l.slice(k+1).split(/[,|]/)];return l.split(/[|,]/)}));
+}
+function guessNetwork(issuer,name){const n=(name||"").toLowerCase();if(issuer==="American Express")return"amex";if(issuer==="Discover")return"discover";if(/\bmc\b|master/.test(n)||["Apple","Barclays","Citi"].includes(issuer))return"mastercard";return"visa"}
+function buildPlan(rows){
+  const plan=[];const pool=S.cards.slice();
+  for(const row of rows){
+    const pl=parseLabel(row.label);let card=matchCard(pl,pool);
+    const cells=row.cells.map(c=>parseCell(c,pl.holder||(card&&pids().includes(card.holder)?card.holder:null))).filter(Boolean);
+    const bt=row.bt||cells.some(c=>c.type==="check");
+    const entry={label:row.label,pl,card,bt,uses:cells.filter(c=>c.type==="use"),bts:cells.filter(c=>c.type==="bt"),notes:[...new Set(cells.filter(c=>c.type==="note").map(c=>c.raw))]};
+    if(!card&&pl.issuer)entry.create={issuer:pl.issuer,name:pl.name.replace(/\b\w/g,ch=>ch.toUpperCase()),network:guessNetwork(pl.issuer,pl.name),last4:pl.last4,holder:pl.holder||"joint",active:true,notes:""};
+    if(card)pool.splice(pool.indexOf(card),1);
+    plan.push(entry);
+  }
+  return plan;
+}
+function applyPlan(plan){
+  let made=0,uses=0;const touched=new Set();
+  for(const e of plan){
+    let c=e.card;
+    if(!c&&e.create){const nc={...e.create};saveCard(nc);c=cardById(nc.id);made++}
+    if(!c)continue;
+    const u={...c};let changed=!!e.create;
+    const lastBT=e.bts.map(b=>b.mid).sort().pop();
+    if(e.bt&&!u.bt){u.bt=true;changed=true}
+    if(!e.bt&&lastBT){if(u.bt)u.bt=false;if(!u.btPaidOff||lastBT>u.btPaidOff)u.btPaidOff=lastBT;changed=true}
+    if(e.bt&&lastBT&&!u.btStart){u.btStart=lastBT;changed=true}
+    const notes=e.notes.filter(n=>!(u.notes||"").includes(n));if(notes.length){u.notes=[u.notes,...notes].filter(Boolean).join(" · ");changed=true}
+    if(changed)saveCard(u);
+    for(const us of e.uses){
+      const slots={...slotsFor(us.mid)};if(Object.values(slots).includes(c.id))continue;
+      placeCard(slots,us.mid,us.p,c);S.months[us.mid]={...(S.months[us.mid]||{}),slots};touched.add(us.mid);uses++;
+    }
+  }
+  [...touched].sort().forEach(mid=>saveMonth(mid));
+  render();
+  return {made,uses,months:touched.size};
+}
+let xlsxLoading=null;
+function loadXLSX(){if(window.XLSX)return Promise.resolve(window.XLSX);if(xlsxLoading)return xlsxLoading;
+  xlsxLoading=new Promise((ok,bad)=>{const sc=document.createElement("script");sc.src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";sc.onload=()=>ok(window.XLSX);sc.onerror=()=>{xlsxLoading=null;bad(new Error("load"))};document.head.appendChild(sc)});return xlsxLoading}
+const SHOT_PROMPT=`This image is a family's credit card usage tracker (usually a spreadsheet).
+Read it row by row. Reply with ONLY a JSON array, one object per card row, in order:
+[{"label": "text of the first column, e.g. 'Alex Chase Sapphire'", "bt": true if that row has a check mark in a column headed BT or Balance Transfer, "cells": ["text of each later cell, left to right, '' when empty"]}]
+Skip the header row. Copy cell text exactly as written (e.g. "Alex Sept", "BT Aug", "AT&T Cell"). Do not include check marks in "cells".`;
+function openImport(mode){
+  mode=mode||"file";let ctl=null;
+  const tabs=[["file","Excel or CSV"],...(S.sample&&S.sampleImages?[["photo","Screenshot"]]:[]),["text","Paste text"]];
+  const html=`<div class="modal-h"><div><span class="label">Import</span><h2>Bring in past usage</h2></div><button class="icon-btn" data-act="close" aria-label="Close">×</button></div>
+    <div class="modal-b" id="imp-body">
+      <div class="seg" role="tablist">${tabs.map(([k,l])=>`<button data-imode="${k}" aria-pressed="${k===mode}">${l}</button>`).join("")}</div>
+      <div id="imp-src"></div>
+      <details class="note"><summary>What the import understands</summary>
+        <p>One row per card. First column: who holds it, the bank and the card name, like <span class="mono">${esc(nameOf(pids()[0]))} Chase Sapphire</span>. An optional <span class="mono">BT</span> column with a check mark flags a balance transfer. Other cells: who used it and the month, like <span class="mono">${esc(nameOf(pids()[0]))} Sept</span>. <span class="mono">BT Aug</span> means a balance transfer paid off in August. Anything else, like <span class="mono">AT&amp;T Cell</span>, is kept as a note.</p></details>
+      <div id="imp-status" class="note" role="status"></div>
+    </div>
+    <div class="modal-f"><span></span><button class="btn" data-act="close">Cancel</button></div>`;
+  openModal(html,r=>{
+    const src=r.querySelector("#imp-src"),st=r.querySelector("#imp-status");
+    const go=rows=>{if(!rows.length){st.innerHTML=`<span style="color:var(--bad)">No card rows found. Check that the first column names each card.</span>`;return}openPreview(buildPlan(rows))};
+    const show=m=>{mode=m;r.querySelectorAll("[data-imode]").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.imode===m)));st.textContent="";
+      if(m==="file"){src.innerHTML=`<label class="drop"><input type="file" id="imp-file" accept=".xlsx,.xls,.csv,.tsv,.txt"><span class="opt-t">Choose a spreadsheet</span><span class="note">.xlsx, .xls or .csv</span></label>`;
+        src.querySelector("#imp-file").addEventListener("change",async e=>{const f=e.target.files[0];if(!f)return;st.textContent="Reading "+f.name+"…";
+          try{if(/\.(csv|tsv|txt)$/i.test(f.name)){const t=await f.text();go(/\.tsv$/i.test(f.name)||t.includes("\t")?rowsFromAOA(t.split(/\r?\n/).map(l=>l.split("\t"))):rowsFromAOA(t.split(/\r?\n/).map(l=>l.split(","))));return}
+            const X=await loadXLSX();const wb=X.read(await f.arrayBuffer(),{type:"array"});const ws=wb.Sheets[wb.SheetNames[0]];go(rowsFromAOA(X.utils.sheet_to_json(ws,{header:1,defval:"",raw:false})));}
+          catch(err){st.innerHTML=`<span style="color:var(--bad)">Couldn't read that file. Save it as .xlsx or .csv and try again.</span>`}});}
+      else if(m==="photo"){src.innerHTML=`<label class="drop"><input type="file" id="imp-photo" accept="image/png,image/jpeg,image/webp"><span class="opt-t">Choose a screenshot</span><span class="note">Claude reads the picture. This uses your Claude account and can take up to a minute.</span></label>`;
+        src.querySelector("#imp-photo").addEventListener("change",async e=>{const f=e.target.files[0];if(!f)return;ctl=new AbortController();
+          st.innerHTML=`Reading the screenshot… <button class="linkish" id="imp-stop">Stop</button>`;r.querySelector("#imp-stop").onclick=()=>ctl.abort();
+          try{const rows=await S.sample.json(SHOT_PROMPT,{images:[f],signal:ctl.signal});go((Array.isArray(rows)?rows:[]).filter(x=>x&&x.label).map(x=>({label:String(x.label),bt:!!x.bt,cells:(x.cells||[]).map(String)})))}
+          catch(err){st.innerHTML=err&&err.code==="cancelled"?"Stopped.":`<span style="color:var(--bad)">${err&&err.code==="not_granted"?"Screenshot reading wasn't allowed. Use a file or paste text instead.":err&&err.code==="rate_limited"?"Claude is busy right now. Try again in a few minutes.":"Couldn't read that screenshot. Try a sharper image, or paste the text instead."}</span>`}});}
+      else{src.innerHTML=`<textarea class="inp mono" id="imp-text" rows="9" style="resize:vertical;width:100%" placeholder="${esc(nameOf(pids()[0]))} Chase Sapphire: ${esc(nameOf(pids()[0]))} June, ${esc(nameOf(pids()[0]))} Jan&#10;${esc(nameOf(pids()[pids().length-1]))} AMEX Hilton: ${esc(nameOf(pids()[pids().length-1]))} Sept&#10;${esc(nameOf(pids()[0]))} Citi Strata: BT, BT Aug"></textarea><div style="display:flex;justify-content:flex-end;gap:8px"><button class="btn primary" id="imp-read">Read text</button></div>`;
+        src.querySelector("#imp-read").addEventListener("click",async()=>{const t=src.querySelector("#imp-text").value;const rows=rowsFromText(t);
+          const plan=rows.length?buildPlan(rows):[];const known=plan.filter(p=>p.card||p.create).length;
+          if(known||!S.sample){go(rows);return}
+          ctl=new AbortController();st.innerHTML=`Asking Claude to read it… <button class="linkish" id="imp-stop">Stop</button>`;r.querySelector("#imp-stop").onclick=()=>ctl.abort();
+          try{const out=await S.sample.json(SHOT_PROMPT.replace("This image is","The text below is")+"\n\nTEXT:\n"+t.slice(0,20000),{signal:ctl.signal});go((Array.isArray(out)?out:[]).filter(x=>x&&x.label).map(x=>({label:String(x.label),bt:!!x.bt,cells:(x.cells||[]).map(String)})))}
+          catch(err){st.innerHTML=err&&err.code==="cancelled"?"Stopped.":`<span style="color:var(--bad)">Couldn't make sense of that text. Put one card per line, starting with who holds it and the bank.</span>`}});}
+    };
+    r.querySelectorAll("[data-imode]").forEach(b=>b.addEventListener("click",()=>show(b.dataset.imode)));
+    show(mode);
+  });
+}
+function openPreview(plan){
+  const dup=(e,u)=>!!e.card&&Object.values(slotsFor(u.mid)).includes(e.card.id);
+  const fresh=plan.flatMap(e=>e.uses.filter(u=>!dup(e,u)));const usesN=fresh.length,months=new Set(fresh.map(u=>u.mid)).size;
+  const dupN=plan.reduce((a,e)=>a+e.uses.filter(u=>dup(e,u)).length,0);
+  const newN=plan.filter(e=>e.create).length,skipped=plan.filter(e=>!e.card&&!e.create);
+  const cardCell=e=>e.card?`<strong>${esc(e.card.issuer)} ${esc(e.card.name)}</strong><div class="note">${e.card.holder==="joint"||!pids().includes(e.card.holder)?"Anyone":esc(nameOf(e.card.holder))}</div>`:e.create?`<span class="chip ok" style="padding:0 8px">New</span> <strong>${esc(e.create.issuer)} ${esc(e.create.name)}</strong><div class="note">${NETWORKS[e.create.network]} · ${e.create.holder==="joint"?"Anyone":esc(nameOf(e.create.holder))}</div>`:`<span style="color:var(--bad)">Bank not recognized, skipped</span>`;
+  openModal(`<div class="modal-h"><div><span class="label">Check before importing</span><h2>${plan.length} rows read</h2></div><button class="icon-btn" data-act="close" aria-label="Close">×</button></div>
+    <div class="modal-b">
+      <div class="rules"><div class="rule"><span class="label">New card uses</span><span class="v mono">${usesN}</span><span class="note">across ${months} month${months===1?"":"s"}${dupN?` · ${dupN} already in history`:""}</span></div>
+      <div class="rule"><span class="label">New cards</span><span class="v mono">${newN}</span><span class="note">${plan.filter(e=>e.card).length} matched to your wallet</span></div>
+      <div class="rule"><span class="label">Balance transfers</span><span class="v mono">${plan.filter(e=>e.bt).length}</span><span class="note">${plan.filter(e=>!e.bt&&e.bts.length).length} paid off</span></div></div>
+      ${skipped.length?`<p class="note" style="color:var(--bad)">${skipped.length} row${skipped.length>1?"s":""} skipped because the bank wasn't recognized: ${skipped.map(e=>esc(e.label)).join(", ")}</p>`:""}
+      <div class="tscroll"><table style="min-width:620px"><thead><tr><th>Your sheet</th><th>Card in app</th><th>BT</th><th>Uses</th><th>Notes</th></tr></thead><tbody class="static">
+      ${plan.map(e=>`<tr><td>${esc(e.label)}</td><td>${cardCell(e)}</td><td>${e.bt?`<span class="chip bad" style="padding:0 8px">On BT</span>`:e.bts.length?`<span class="note">Paid off ${mShort(e.bts.map(b=>b.mid).sort().pop())}</span>`:""}</td><td>${e.uses.map(u=>`<span class="exchip" style="padding:2px 8px;margin:0 4px 4px 0;${dup(e,u)?"opacity:.55":""}" title="${dup(e,u)?"Already in history":"Will be added"}">${esc(nameOf(u.p))} · ${mShort(u.mid)}${dup(e,u)?" ✓":""}</span>`).join("")}</td><td class="note">${e.notes.map(esc).join(", ")}</td></tr>`).join("")}
+      </tbody></table></div>
+      <p class="note">Months without a year are placed in the most recent matching month. Uses already in your history are skipped, so importing twice is safe.</p>
+    </div>
+    <div class="modal-f"><button class="btn" data-act="import">Back</button><button class="btn primary" id="imp-apply" ${plan.some(e=>e.card||e.create)?"":"disabled"}>Import</button></div>`,r=>{
+    r.querySelector("#imp-apply").addEventListener("click",()=>{const res=applyPlan(plan);closeModal();S.tab="month";render();toast(`Imported ${res.uses} use${res.uses===1?"":"s"} in ${res.months} month${res.months===1?"":"s"}${res.made?` · ${res.made} new card${res.made>1?"s":""}`:""}`)});
+  });
+}
+
+function exportData(){
+  const dump={app:"card-rotation",version:1,exportedAt:new Date().toISOString(),settings:S.settings,
+    cards:Object.fromEntries(S.cards.map(c=>{const {id,...b}=c;return [id,b]})),months:S.months};
+  const txt=JSON.stringify(dump);
+  openModal(`<div class="modal-h"><div><span class="label">Backup</span><h2>Back up or move your data</h2></div><button class="icon-btn" data-act="close" aria-label="Close">×</button></div>
+    <div class="modal-b">
+      <p class="note">This text holds your family members, rules, ${S.cards.length} cards and ${Object.keys(S.months).length} months of history. Only card names and last four digits are included, never full card numbers.</p>
+      <textarea class="inp mono" id="bk-out" rows="5" readonly style="width:100%">${esc(txt)}</textarea>
+      <div><button class="btn primary" id="bk-copy">Copy backup</button></div>
+      <h3 style="margin-top:8px">Restore from a backup</h3>
+      <p class="note">Paste a backup from this app. Matching cards and months are replaced; nothing else is deleted.</p>
+      <textarea class="inp mono" id="bk-in" rows="4" style="width:100%" placeholder='{"app":"card-rotation", …}'></textarea>
+      <div id="bk-st" class="note" role="status"></div>
+    </div>
+    <div class="modal-f"><span></span><div style="display:flex;gap:8px"><button class="btn" data-act="close">Close</button><button class="btn primary" id="bk-restore">Restore</button></div></div>`,r=>{
+    r.querySelector("#bk-copy").addEventListener("click",()=>{const ta=r.querySelector("#bk-out");
+      navigator.clipboard?.writeText(txt).then(()=>toast("Backup copied"),()=>{ta.select();toast("Select all and copy")})||(ta.select(),toast("Select all and copy"))});
+    r.querySelector("#bk-restore").addEventListener("click",()=>{const st=r.querySelector("#bk-st");let d;
+      try{d=JSON.parse(r.querySelector("#bk-in").value)}catch(e){st.innerHTML=`<span style="color:var(--bad)">That isn't a backup from this app. Copy the whole block and try again.</span>`;return}
+      if(!d||d.app!=="card-rotation"){st.innerHTML=`<span style="color:var(--bad)">That isn't a backup from this app.</span>`;return}
+      if(d.settings){S.settings={...S.settings,...d.settings,setupDone:true};if(S.db)queue("settings/main",()=>S.db.doc("settings/main").set(JSON.parse(JSON.stringify(S.settings))))}
+      for(const [id,b] of Object.entries(d.cards||{})){const i=S.cards.findIndex(c=>c.id===id);const c={...b,id};if(i>=0)S.cards[i]=c;else S.cards.push(c);if(S.db)queue("cards/"+id,()=>S.db.doc("cards/"+id).set(b))}
+      for(const [mid,m] of Object.entries(d.months||{})){S.months[mid]=m;saveMonth(mid)}
+      closeModal();render();toast("Backup restored");});
+  });
+}
+
+/* ---------- events ---------- */
+document.addEventListener("click",e=>{
+  const t=e.target.closest("[data-act],[data-tab]");if(!t)return;
+  if(t.dataset.tab){S.tab=t.dataset.tab;render();return}
+  const a=t.dataset.act;
+  if(a==="closeoverlay"){if(e.target===t&&!S.setupOpen)closeModal();return}
+  if(a==="cnt"||a==="setupback"||a==="setupcancel")return;
+  if(a==="close"){closeModal();return}
+  if(a==="prev"){S.month=shiftMonth(S.month,-1);render()}
+  else if(a==="next"){S.month=shiftMonth(S.month,1);render()}
+  else if(a==="today"){S.month=thisMonth();render()}
+  else if(a==="pick")openPicker(t.dataset.key);
+  else if(a==="unset"){const s={...slotsFor(S.month)};delete s[t.dataset.key];S.months[S.month]={...(S.months[S.month]||{}),slots:s};saveMonth(S.month)}
+  else if(a==="acceptall")acceptSuggestions();
+  else if(a==="assign")assignCard(S.month,t.dataset.p,t.dataset.id);
+  else if(a==="third"){const p=t.dataset.p,on=t.dataset.v==="1";const m={...(S.months[S.month]||{})};const third={...(m.third||{})};const slots={...(m.slots||{})};
+    if(on)third[p]=true;else{delete third[p];delete slots[p+"_any_0"]}
+    S.months[S.month]={...m,third,slots};saveMonth(S.month);toast(on?`3rd card added for ${nameOf(p)}`:`3rd card removed for ${nameOf(p)}`)}
+  else if(a==="thirdall"){S.settings.third=t.dataset.v==="1";saveSettings();render()}
+  else if(a==="acceptone")acceptSuggestions(t.dataset.key);
+  else if(a==="clearmonth"){if(!t.classList.contains("armed")){t.classList.add("armed","danger");t.textContent="Tap again to clear";setTimeout(()=>render(),3000);return}S.months[S.month]={...(S.months[S.month]||{}),slots:{}};saveMonth(S.month);toast("Month cleared")}
+  else if(a==="addcard")openCardForm(null);
+  else if(a==="editcard")openCardForm(cardById(t.dataset.id));
+  else if(a==="lastused")openUsage(t.dataset.id);
+  else if(a==="bulklast")openBulkLast();
+  else if(a==="bulk")openBulk();
+  else if(a==="issuer"){S.issuer=t.dataset.v;if(!t.dataset.v)S.btOnly=false;render()}
+  else if(a==="btfilter"){S.btOnly=!S.btOnly;render()}
+  else if(a==="setst")setStatus(t.dataset.id,t.dataset.st);
+  else if(a==="bton")setBT(t.dataset.id,true);
+  else if(a==="btoff")setBT(t.dataset.id,false);
+  else if(a==="gomonth"){S.month=t.dataset.m;S.tab="month";render()}
+  else if(a==="import"){closeModal();openImport(t.dataset.mode)}
+  else if(a==="getstarted"){openGetStarted()}
+  else if(a==="rerunsetup"){openSetup(true)}
+  else if(a==="exportjson"){exportData()}
+  else if(a==="visarule"){S.settings.visaRule=t.dataset.v;saveSettings();render()}
+});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!S.setupOpen)closeModal()});
+document.addEventListener("input",e=>{
+  const id=e.target.id;
+  if(id==="q"){S.q=e.target.value;const pos=e.target.selectionStart;render();const q=$("#q");q.focus();q.setSelectionRange(pos,pos)}
+  else if(e.target.dataset.pname){const x=people().find(x=>x.id===e.target.dataset.pname);if(x){x.name=e.target.value;saveSettings()}}
+});
+document.addEventListener("change",e=>{
+  const id=e.target.id;
+  if(e.target.dataset.cardfield){const c=cardById(e.target.dataset.id);if(c){saveCard({...c,[e.target.dataset.cardfield]:e.target.value.trim()});render();toast("Saved")}return}
+  if(e.target.dataset.btfield){const c=cardById(e.target.dataset.id);if(c){saveCard({...c,[e.target.dataset.btfield]:e.target.value});render();toast("Saved")}return}
+  if(id==="sort"){S.sort=e.target.value;render()}
+  else if(id==="idle"){S.settings.idle=Number(e.target.value);saveSettings();render()}
+  else if(id==="per-amex"||id==="per-visa"){S.settings.per[id.slice(4)]=Number(e.target.value);saveSettings();render()}
+  else if(e.target.dataset.pname)render();
+  else if(id==="pcount"){setCount(Number(e.target.value));saveSettings();render()}
+});
+
+render();
+
+/* ---------- storage: Claude's shared db, or this device when running on its own ---------- */
+function makeLocalDB(){
+  const KEY="card-rotation:v1";
+  let data;
+  try{data=JSON.parse(localStorage.getItem(KEY)||"null")}catch(e){return null}
+  try{localStorage.setItem(KEY+":probe","1");localStorage.removeItem(KEY+":probe")}catch(e){return null}
+  data=data||{cards:{},months:{},settings:{}};
+  const subs={};
+  const persist=()=>{try{localStorage.setItem(KEY,JSON.stringify(data))}catch(e){toast("This device is out of storage space.")}};
+  const snapCol=c=>({docs:Object.entries(data[c]||{}).sort(([a],[b])=>a.localeCompare(b)).map(([id,body])=>({id,exists:true,data:()=>body})),get size(){return this.docs.length}});
+  const notify=(c,id)=>setTimeout(()=>{(subs[c]||[]).forEach(f=>f(snapCol(c)));(subs[c+"/"+id]||[]).forEach(f=>f(snapDoc(c,id)))},0);
+  const snapDoc=(c,id)=>{const body=(data[c]||{})[id];return {id,exists:!!body,data:()=>body}};
+  const docRef=(c,id)=>({id,set:async body=>{(data[c]=data[c]||{})[id]=JSON.parse(JSON.stringify(body));persist();notify(c,id)},
+    delete:async()=>{if(data[c])delete data[c][id];persist();notify(c,id)},
+    onSnapshot:next=>{(subs[c+"/"+id]=subs[c+"/"+id]||[]).push(next);setTimeout(()=>next(snapDoc(c,id)),0);return()=>{}}});
+  return {
+    local:true,
+    collection:c=>({doc:id=>docRef(c,id||("id"+Date.now().toString(36)+Math.random().toString(36).slice(2,8))),
+      onSnapshot:next=>{(subs[c]=subs[c]||[]).push(next);setTimeout(()=>next(snapCol(c)),0);return()=>{}}}),
+    doc:path=>{const [c,id]=path.split("/");return docRef(c,id)},
+    exportAll:()=>JSON.parse(JSON.stringify(data)),
+  };
+}
+(async()=>{
+  let db=null;
+  try{db=window.claude&&window.claude.use?await window.claude.use("db"):null}catch(e){db=null}
+  if(!db){db=makeLocalDB();if(db){S.localMode=true;const b=$("#banner");b.hidden=false;b.textContent="Saved on this device only. Family members on other phones won't see these picks.";}}
+  S.loading=false;
+  if(!db){const b=$("#banner");b.hidden=false;b.textContent="Saving is off in this view. You can try things out, but changes won't be kept.";render();openSetup();return}
+  S.db=db;
+  (async()=>{try{S.sample=window.claude&&window.claude.use?await window.claude.use("sample"):null}catch(e){S.sample=null}
+    if(S.sample){try{const lim=await S.sample.limits();S.sampleImages=!!(lim&&lim.images)}catch(e){S.sampleImages=false}}})();
+  db.collection("cards").onSnapshot(snap=>{S.cards=snap.docs.map(d=>({...d.data(),id:d.id}));render()},err=>console.warn(err));
+  db.collection("months").onSnapshot(snap=>{const m={};snap.docs.forEach(d=>m[d.id]=d.data());S.months=m;if(!document.querySelector(".overlay"))render()},err=>console.warn(err));
+  db.doc("settings/main").onSnapshot(snap=>{if(snap.exists){const d=snap.data();S.settings={people:Array.isArray(d.people)&&d.people.length?d.people.map(x=>({id:String(x.id),name:String(x.name||"")})):S.settings.people,per:{...S.settings.per,...(d.per||{})},visaRule:d.visaRule||"visa",idle:Number(d.idle)||3,third:!!d.third,setupDone:!!d.setupDone};const ae=document.activeElement;if(!(ae&&ae.dataset&&ae.dataset.pname))render()}if(!S.settings.setupDone)openSetup();else if(S.setupOpen)closeSetup()},err=>console.warn(err));
+})();
+})();
+</script>
+
+<script>
+/* Offline support when served over https (GitHub Pages, app wrappers). */
+if("serviceWorker" in navigator && location.protocol==="https:" && !window.claude){
+  window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
+}
+</script>
+</body>
+</html>

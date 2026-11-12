@@ -1,0 +1,15 @@
+{
+  "name": "Card Rotation",
+  "short_name": "Card Rotation",
+  "description": "Plan which credit cards each family member uses every month and keep every card active.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f2f4f6",
+  "theme_color": "#0d6b67",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
