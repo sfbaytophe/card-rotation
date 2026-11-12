@@ -18,4 +18,4 @@ The page loads fonts from Google Fonts, and, only when you import an Excel file,
 
 ## Contact
 
-Questions about this policy: [your contact email].
+Questions about this policy: chris.enerio@gmail.com
